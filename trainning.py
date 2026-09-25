@@ -10,10 +10,10 @@ from sklearn import metrics;
 
 digits=load_digits()
 X_train, X_test, y_train, y_test = train_test_split(digits.data, digits.target, test_size=0.33, random_state=42) #Separate the data into training and test for model evaluation
+score_best = 0
+k_best = 1
 
-
-
-for i in range(1,11):
+for i in range(1,1203):
 
     k=i
     knn=KNeighborsClassifier(n_neighbors=k)
@@ -21,4 +21,9 @@ for i in range(1,11):
     y_pred=knn.predict(X_test)
     scores=metrics.accuracy_score(y_test,y_pred)
     print(f" K ={k} accuracy ={scores}")
+    if score_best< scores:
+        score_best = scores
+        k_best = k
+    print(f"best score{score_best} for {k_best} neighbours")
+
   
