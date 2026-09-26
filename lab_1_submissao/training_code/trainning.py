@@ -2,6 +2,7 @@ import numpy as np;
 import matplotlib.pyplot as plt;
 import pickle
 import pandas as pd
+import joblib
 from sklearn.datasets import load_digits
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
@@ -15,7 +16,7 @@ score_best = 0
 f1_best = 0
 k_f1 = 0
 k_best = 0
-X_train, X_test, y_train, y_test = train_test_split(digits.data, digits.target, test_size=0.33, random_state=42) #Separate the data into training and test for model evaluation
+X_train, X_test, y_train, y_test = train_test_split(digits.data, digits.target, test_size=0.33, random_state=42)
 accuracies = []
 f1_scores = []
 k_values = range(1,k_max)
@@ -41,3 +42,8 @@ plt.legend()
 plt.grid(True)
 
 plt.savefig('knn_metrics.png')
+
+#from analysis of both metrics, the best number of neighbours was 5 for both
+k_best = 5
+
+joblib.dump(k_best, "model.pkl")
