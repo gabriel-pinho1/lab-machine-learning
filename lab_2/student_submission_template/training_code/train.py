@@ -3,8 +3,8 @@
 The final script should reproduce raw-data loading, chronological splitting,
 lag construction, preprocessing, model selection, final fitting, and model
 serialization. sklearn.preprocessing tools may be fitted on input features
-using training data only and then saved for prediction. Keep all supporting
-Python modules in training_code/. Do not use library pipelines, composition
+using history data only and then saved for prediction. Keep all supporting
+Python modules in history_code/. Do not use library pipelines, composition
 wrappers, imputers, feature selectors, or output transformers. Target
 transformation and output post-processing must remain explicit.
 """
@@ -23,15 +23,32 @@ def main() -> None:
     
     args = parser.parse_args()
     
-    df = pd.read_excel(
+    df_history = pd.read_excel(
         args.data, 
         sheet_name="daily_data"
     )
     
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.sort_values("date").reset_index(drop=True)
-    
-    df.to_csv(args.output, index=False) # temporario senao n corre 
+    df_history["date"] = pd.to_datetime(df_history["date"])
+    df_history = df_history.sort_values("date").reset_index(drop=True)
+
+    df_X = pd.DataFrame()
+    p_max = 15
+    q_max = 15
+    column_names = df_history.columns.tolist()
+    exogenous_variables = column_names[2:]
+    new_lags = {}
+
+    for p in range(1, p_max + 1):
+
+        new_lags[f'chlorophyll_lag_{p}'] = df_history["chlorophyll_a_mg_m3"].shift(p)
+
+    for name in exogenous_variables:
+        for q in range (0,q_max):
+
+            new_lags[f'{name}_lag_{q}'] = df_history[f'{name}'].shift(q)
+
+    df_X = pd.DataFrame(new_lags)
+    df_X.to_csv(args.output, index=False) # temporario senao n corre 
 
 if __name__ == "__main__":
     main()
