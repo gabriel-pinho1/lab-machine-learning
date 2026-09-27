@@ -13,15 +13,28 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-
+import pandas as pd
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.parse_args()
-    raise NotImplementedError("Replace training_code/train.py with your training workflow")
-
+    
+    args = parser.parse_args()
+    
+    df = pd.read_excel(
+        args.data, 
+        sheet_name="daily_data"
+    )
+    
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date").reset_index(drop=True)
+    
+    df.to_csv(args.output, index=False) # temporario senao n corre 
 
 if __name__ == "__main__":
     main()
+
+# linha do terminal pra correr codigo atual:
+# python train.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output cleaned_data.csv
