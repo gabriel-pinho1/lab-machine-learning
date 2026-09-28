@@ -53,7 +53,7 @@ def main() -> None:
     new_lags["c_year"] = np.cos(2 * np.pi * df_history["date"].dt.dayofyear / 365.25)
     df_X = pd.DataFrame(new_lags)
     df_X = df_X.fillna(0)
-
+ 
 
 
     df_X.to_csv(args.output, index=False) # temporario senao n corre 
