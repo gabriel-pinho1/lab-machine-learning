@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from build_lagged_features import DATE, TARGET, read_table
+from lab_2.student_submission_template.training_code.build_lagged_features import DATE, TARGET, read_table
 from model_artifact_policy import (
     validate_explicit_transformation_sources,
     validate_explicit_transformations,

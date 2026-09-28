@@ -30,8 +30,7 @@ def predict(model: Any, history_df: pd.DataFrame, day_features_df: pd.DataFrame)
     prediction procedure. Fitted sklearn.preprocessing input objects are
     allowed; library pipelines and output-processing wrappers are not.
     """
+
+    
     return np.asarray([constant_prediction(model)], dtype=float)
 
-#df_phi = df_history.iloc[0:p , [0:-1]].copy().T
-
-# df_phi =
