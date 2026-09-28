@@ -16,6 +16,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from sklearn import linear_model
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 
 def main() -> None:
@@ -30,44 +31,40 @@ def main() -> None:
         args.data, 
         sheet_name="daily_data"
     )
-    DATE = "date"
-    TARGET = "chlorophyll_a_mg_m3"
-    for p in range (10,15):
-        for q in range(8,15):
-            Lag_spec = {
-            TARGET: list(range(1, p)),
-            "sst_c": list(range(0, p)),
-            "par_umol_m2_s": list(range(0, q)),
-            "nitrate_umol_l": list(range(0, p)),
-            "wind_speed_m_s": list(range(0, q)),
-            "upwelling_index": list(range(0, p)),
-            "mixed_layer_depth_m": list(range(0, q)),
-            "salinity_psu": list(range(0, q)),
-            "current_speed_m_s": list(range(0, q)),
-            "river_discharge_index": list(range(0, q)),
-            "cloud_fraction": list(range(0, q)),
-            "surface_pressure_hpa": list(range(0, q)),
-            "turbidity_ntu": list(range(0, q)),
-            }
-            lagged_df = build_lagged_frame(history_df)
-            Y = lagged_df["chlorophyll_a_mg_m3"]
-            X = lagged_df.drop(columns=["date", "chlorophyll_a_mg_m3"])
-            split_idx = -365
-            X_train, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
-            Y_train, Y_val = Y.iloc[:split_idx], Y.iloc[split_idx:]
+   
+    lagged_df = build_lagged_frame(history_df)
+    Y = lagged_df["chlorophyll_a_mg_m3"]
+    X = lagged_df.drop(columns=["date", "chlorophyll_a_mg_m3"])
+    split_idx = -365
+    X_train, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
+    Y_train, Y_val = Y.iloc[:split_idx], Y.iloc[split_idx:]
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_val_scaled = scaler.transform(X_val)
 
-    for k in range(1,10):
-        j = k/10
+    X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns)
+    X_val_scaled = pd.DataFrame(X_val_scaled, columns=X_val.columns)
+    for k in [0.001, 0.01, 0.05, 0.1]:
+        j = k
         model = linear_model.Lasso(alpha=j)
         #model = linear_model.LinearRegression()
-        model.fit(X_train, Y_train)
-        predictions = model.predict(X_val)
+        model.fit(X_train_scaled, Y_train)
+        predictions = model.predict(X_val_scaled)
 
         r2 = r2_score(Y_val, predictions)
         mae = mean_absolute_error(Y_val, predictions)
 
         print(f"Validation R^2: {r2:.4f}")
         print(f"Validation MAE: {mae:.4f} mg/m3")
+        coefficients = pd.Series(model.coef_, index=X_train_scaled.columns)
+        zeroed_features = coefficients[coefficients == 0.0]
+        kept_features = coefficients[coefficients != 0.0]
+
+        print("--- Features Driven to Zero ---")
+        print(zeroed_features)
+
+        print("\n--- Features Kept in the Model ---")
+        print(kept_features)    
 
     X.to_csv(args.output, index=False)
 
@@ -76,4 +73,4 @@ if __name__ == "__main__":
     main()
 
 # linha do terminal pra correr codigo atual:
-# python train.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output cleaned_data.csv\
+# python train.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output cleaned_data.csv

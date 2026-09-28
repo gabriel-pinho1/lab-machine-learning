@@ -13,17 +13,17 @@ TARGET = "chlorophyll_a_mg_m3"
 DEFAULT_LAGS = {
     TARGET: list(range(1, 15)),
     "sst_c": list(range(0, 15)),
-    "par_umol_m2_s": list(range(0, 8)),
+    "par_umol_m2_s": list(range(0, 15)),
     "nitrate_umol_l": list(range(0, 15)),
-    "wind_speed_m_s": list(range(0, 8)),
+    "wind_speed_m_s": list(range(0, 15)),
     "upwelling_index": list(range(0, 15)),
-    "mixed_layer_depth_m": list(range(0, 8)),
-    "salinity_psu": list(range(0, 8)),
-    "current_speed_m_s": list(range(0, 8)),
-    "river_discharge_index": list(range(0, 8)),
-    "cloud_fraction": list(range(0, 8)),
-    "surface_pressure_hpa": list(range(0, 8)),
-    "turbidity_ntu": list(range(0, 8)),
+    "mixed_layer_depth_m": list(range(0, 15)),
+    "salinity_psu": list(range(0, 15)),
+    "current_speed_m_s": list(range(0, 15)),
+    "river_discharge_index": list(range(0, 15)),
+    "cloud_fraction": list(range(0, 15)),
+    "surface_pressure_hpa": list(range(0, 15)),
+    "turbidity_ntu": list(range(0, 15)),
 }
 
 
