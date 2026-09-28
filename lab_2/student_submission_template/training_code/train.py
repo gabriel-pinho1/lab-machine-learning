@@ -10,7 +10,7 @@ transformation and output post-processing must remain explicit.
 """
 
 from __future__ import annotations
-from build_lagged_features import build_lagged_frame, one_day_row
+from build_lagged_features import build_lagged_frame, read_table
 import argparse
 from pathlib import Path
 import pandas as pd
@@ -18,6 +18,7 @@ import numpy as np
 from sklearn import linear_model
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+from scipy import stats
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -27,23 +28,25 @@ def main() -> None:
     
     args = parser.parse_args()
     
-    history_df = pd.read_excel(
-        args.data, 
-        sheet_name="daily_data"
-    )
-   
-    lagged_df = build_lagged_frame(history_df)
+    df_raw = read_table(args.data)
+       
+    lagged_df = build_lagged_frame(df_raw)
     Y = lagged_df["chlorophyll_a_mg_m3"]
     X = lagged_df.drop(columns=["date", "chlorophyll_a_mg_m3"])
     split_idx = -365
     X_train, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
     Y_train, Y_val = Y.iloc[:split_idx], Y.iloc[split_idx:]
+    
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_val_scaled = scaler.transform(X_val)
 
     X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns)
     X_val_scaled = pd.DataFrame(X_val_scaled, columns=X_val.columns)
+
+    
+        
+
     for k in [0.001, 0.01, 0.05, 0.1]:
         j = k
         model = linear_model.Lasso(alpha=j)
@@ -54,19 +57,19 @@ def main() -> None:
         r2 = r2_score(Y_val, predictions)
         mae = mean_absolute_error(Y_val, predictions)
 
+        print(f'alpha={j}')
         print(f"Validation R^2: {r2:.4f}")
         print(f"Validation MAE: {mae:.4f} mg/m3")
         coefficients = pd.Series(model.coef_, index=X_train_scaled.columns)
         zeroed_features = coefficients[coefficients == 0.0]
         kept_features = coefficients[coefficients != 0.0]
-
         print("--- Features Driven to Zero ---")
         print(zeroed_features)
 
         print("\n--- Features Kept in the Model ---")
         print(kept_features)    
 
-    X.to_csv(args.output, index=False)
+    X_train_scaled.to_csv(args.output, index=False)
 
 
 if __name__ == "__main__":
