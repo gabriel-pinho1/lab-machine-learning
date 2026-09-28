@@ -15,7 +15,7 @@ import argparse
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression
+from sklearn import linear_model
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 
 def main() -> None:
@@ -49,22 +49,25 @@ def main() -> None:
             "surface_pressure_hpa": list(range(0, q)),
             "turbidity_ntu": list(range(0, q)),
             }
-            lagged_df = build_lagged_frame(history_df, Lag_spec)
+            lagged_df = build_lagged_frame(history_df)
             Y = lagged_df["chlorophyll_a_mg_m3"]
             X = lagged_df.drop(columns=["date", "chlorophyll_a_mg_m3"])
             split_idx = -365
             X_train, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
             Y_train, Y_val = Y.iloc[:split_idx], Y.iloc[split_idx:]
 
-            model = LinearRegression()
-            model.fit(X_train, Y_train)
-            predictions = model.predict(X_val)
+    for k in range(1,10):
+        j = k/10
+        model = linear_model.Lasso(alpha=j)
+        #model = linear_model.LinearRegression()
+        model.fit(X_train, Y_train)
+        predictions = model.predict(X_val)
 
-            r2 = r2_score(Y_val, predictions)
-            mae = mean_absolute_error(Y_val, predictions)
+        r2 = r2_score(Y_val, predictions)
+        mae = mean_absolute_error(Y_val, predictions)
 
-            print(f"Validation R^2: {r2:.4f}")
-            print(f"Validation MAE: {mae:.4f} mg/m3")
+        print(f"Validation R^2: {r2:.4f}")
+        print(f"Validation MAE: {mae:.4f} mg/m3")
 
     X.to_csv(args.output, index=False)
 
@@ -73,4 +76,4 @@ if __name__ == "__main__":
     main()
 
 # linha do terminal pra correr codigo atual:
-# python train.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output cleaned_data.csv
+# python train.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output cleaned_data.csv\
