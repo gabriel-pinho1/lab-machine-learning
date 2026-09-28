@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -37,7 +38,7 @@ def main() -> None:
     column_names = df_history.columns.tolist()
     exogenous_variables = column_names[2:]
     new_lags = {}
-
+    Y = df_history["chlorophyll_a_mg_m3"]
     for p in range(1, p_max + 1):
 
         new_lags[f'chlorophyll_lag_{p}'] = df_history["chlorophyll_a_mg_m3"].shift(p)
@@ -47,7 +48,14 @@ def main() -> None:
 
             new_lags[f'{name}_lag_{q}'] = df_history[f'{name}'].shift(q)
 
+
+    new_lags["s_year"] = np.sin(2 * np.pi * df_history["date"].dt.dayofyear / 365.25)
+    new_lags["c_year"] = np.cos(2 * np.pi * df_history["date"].dt.dayofyear / 365.25)
     df_X = pd.DataFrame(new_lags)
+    df_X = df_X.fillna(0)
+
+
+
     df_X.to_csv(args.output, index=False) # temporario senao n corre 
 
 if __name__ == "__main__":
