@@ -59,7 +59,6 @@ def main() -> None:
    
     for idx, name in enumerate(raw_columns_names):
         
-       
         max_lag = lag_vector[idx]
         
         for p in range(1, max_lag):
@@ -70,8 +69,7 @@ def main() -> None:
                 cols_to_sum = [f"{name}__lag_{i}" for i in range(0, p)]
 
  
-            if len(cols_to_sum) > 0:
-                new_columns[f"row_sum_{name}_{p}_days"] = X[cols_to_sum].sum(axis=1)
+            new_columns[f"row_sum_{name}_{p}_days"] = X[cols_to_sum].sum(axis=1)
                 
     df_lag_sum = pd.DataFrame(new_columns)            
     X = pd.concat([X, df_lag_sum], axis=1)
