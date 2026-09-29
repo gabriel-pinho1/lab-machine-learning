@@ -20,20 +20,21 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from scipy import stats
 TARGET = "chlorophyll_a_mg_m3"
+lag_vector = [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15]
 NEW_LAGS = {
-    TARGET: list(range(1, 15)),
-    "sst_c": list(range(0, 15)),
-    "par_umol_m2_s": list(range(0, 15)),
-    "nitrate_umol_l": list(range(0, 15)),
-    "wind_speed_m_s": list(range(0, 15)),
-    "upwelling_index": list(range(0, 15)),
-    "mixed_layer_depth_m": list(range(0, 15)),
-    "salinity_psu": list(range(0, 15)),
-    "current_speed_m_s": list(range(0, 15)),
-    "river_discharge_index": list(range(0, 15)),
-    "cloud_fraction": list(range(0, 15)),
-    "surface_pressure_hpa": list(range(0, 15)),
-    "turbidity_ntu": list(range(0, 15)),
+    TARGET: list(range(1, lag_vector[0])),
+    "sst_c": list(range(0, lag_vector[1])),
+    "par_umol_m2_s": list(range(0, lag_vector[2])),
+    "nitrate_umol_l": list(range(0, lag_vector[3])),
+    "wind_speed_m_s": list(range(0, lag_vector[4])),
+    "upwelling_index": list(range(0, lag_vector[5])),
+    "mixed_layer_depth_m": list(range(0, lag_vector[6])),
+    "salinity_psu": list(range(0, lag_vector[7])),
+    "current_speed_m_s": list(range(0, lag_vector[8])),
+    "river_discharge_index": list(range(0, lag_vector[9])),
+    "cloud_fraction": list(range(0, lag_vector[10])),
+    "surface_pressure_hpa": list(range(0, lag_vector[11])),
+    "turbidity_ntu": list(range(0, lag_vector[12])),
 }
 
 
@@ -54,20 +55,26 @@ def main() -> None:
     df_lag_sum = pd.DataFrame()
     new_columns = {}
 
-    for name in raw_columns_names:
-        for p in range(1,15):
+
+   
+    for idx, name in enumerate(raw_columns_names):
+        
+       
+        max_lag = lag_vector[idx]
+        
+        for p in range(1, max_lag):
             if name == "chlorophyll_a_mg_m3":
-                
+              
                 cols_to_sum = [f"{name}__lag_{i}" for i in range(1, p)]
             else:
-                
                 cols_to_sum = [f"{name}__lag_{i}" for i in range(0, p)]
 
-
-            new_columns[f"row_sum_{name}_{p}_days"] = X[cols_to_sum].sum(axis=1)
+ 
+            if len(cols_to_sum) > 0:
+                new_columns[f"row_sum_{name}_{p}_days"] = X[cols_to_sum].sum(axis=1)
+                
     df_lag_sum = pd.DataFrame(new_columns)            
-    X = pd.concat([X, df_lag_sum], axis = 1)
-
+    X = pd.concat([X, df_lag_sum], axis=1)
     split_idx = -365
     X_train, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
     Y_train_log, Y_val_log = Y.iloc[:split_idx], Y.iloc[split_idx:]
