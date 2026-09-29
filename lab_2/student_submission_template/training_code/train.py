@@ -19,6 +19,23 @@ from sklearn import linear_model
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from scipy import stats
+TARGET = "chlorophyll_a_mg_m3"
+NEW_LAGS = {
+    TARGET: list(range(1, 15)),
+    "sst_c": list(range(0, 15)),
+    "par_umol_m2_s": list(range(0, 15)),
+    "nitrate_umol_l": list(range(0, 15)),
+    "wind_speed_m_s": list(range(0, 15)),
+    "upwelling_index": list(range(0, 15)),
+    "mixed_layer_depth_m": list(range(0, 15)),
+    "salinity_psu": list(range(0, 15)),
+    "current_speed_m_s": list(range(0, 15)),
+    "river_discharge_index": list(range(0, 15)),
+    "cloud_fraction": list(range(0, 15)),
+    "surface_pressure_hpa": list(range(0, 15)),
+    "turbidity_ntu": list(range(0, 15)),
+}
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -30,7 +47,7 @@ def main() -> None:
     
     df_raw = read_table(args.data)
        
-    lagged_df = build_lagged_frame(df_raw)
+    lagged_df = build_lagged_frame(df_raw, NEW_LAGS)
     Y = lagged_df["chlorophyll_a_mg_m3"]
     X = lagged_df.drop(columns=["date", "chlorophyll_a_mg_m3"])
     split_idx = -365
@@ -46,8 +63,9 @@ def main() -> None:
 
     
         
-
-    for k in [0.001, 0.01, 0.05, 0.1]:
+    r2_best = 0
+    j_best = 0
+    for k in [0.0029]:
         j = k
         model = linear_model.Lasso(alpha=j)
         #model = linear_model.LinearRegression()
@@ -68,7 +86,12 @@ def main() -> None:
 
         print("\n--- Features Kept in the Model ---")
         print(kept_features)    
+        if r2 > r2_best:
+            r2_best = r2
+            j_best = j
 
+    print(f'alpha_best={j_best}')
+    print(f"Validation R^2_best: {r2_best:.4f}")
     X_train_scaled.to_csv(args.output, index=False)
 
 

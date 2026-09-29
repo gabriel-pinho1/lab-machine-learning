@@ -24,45 +24,69 @@ def main() -> None:
     args = parser.parse_args()
     
     df_raw = read_table(args.data)
-   
     lagged_df = build_lagged_frame(df_raw)
     Y = lagged_df["chlorophyll_a_mg_m3"]
     X = lagged_df.drop(columns=["date", "chlorophyll_a_mg_m3"])
     split_idx = -365
-    X_train, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
-    Y_train, Y_val = Y.iloc[:split_idx], Y.iloc[split_idx:]
+    X_train = X.iloc[:split_idx]
+    Y_train = Y.iloc[:split_idx]
+    lagged_columns_names = X_train.columns.tolist()
+    inputs = lagged_columns_names
     
-    column_names = X_train.columns.tolist()
-    inputs = column_names
     
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
-    X_val_scaled = scaler.transform(X_val)
+    df_raw_copy = lagged_df.drop(columns=["date"]).copy()
+    df_raw_scaled = scaler.fit_transform(df_raw_copy)
     
     X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns)
-    X_val_scaled = pd.DataFrame(X_val_scaled, columns=X_val.columns)
+    df_raw_scaled = pd.DataFrame(df_raw_scaled, columns=df_raw_copy.columns)
+    raw_collumn_names = df_raw_scaled.columns.tolist()
+    df_raw_scaled = pd.concat([lagged_df['date'], df_raw_scaled], axis = 1)
     
-    print("yay")
+
+    scatter_dir = args.output / "scatter_plots"
+    line_dir = args.output / "line_plots"
     
-    # CRITICAL FIX: Create the output directory if it doesn't exist
-    args.output.mkdir(parents=True, exist_ok=True)
+    scatter_dir.mkdir(parents=True, exist_ok=True)
+    line_dir.mkdir(parents=True, exist_ok=True)
     
-    for name in inputs:
+    '''  for name in inputs:
         x = X_train_scaled[name]
         y = Y_train.values
 
         plt.scatter(x, y)
         plt.title(f"Scatter Plot: {name}")
-        plt.xlabel("X Values")
+        plt.xlabel(f"{name}")
         plt.ylabel("Y Values")
 
         safe_name = name.replace("/", "_") 
         
-        # Now this will successfully save because the directory exists
-        plt.savefig(args.output / f"scatter_{safe_name}.png")
-        plt.close() # Free up memory
+        plt.savefig(scatter_dir / f"scatter_{safe_name}.png")
+        plt.close() 
         
-    print("yay2")
+    print("yay2") '''
+    
+    
+    for name in raw_collumn_names:
+
+        x =  df_raw_scaled['date']
+        y1 = df_raw_scaled[name]
+        y2 = df_raw_scaled['chlorophyll_a_mg_m3']
+        corr_value = y1.corr(y2)
+        plt.plot(x, y1, label = str(name))
+        plt.plot(x, y2, label ="chlorophyll_a_mg_m3")
+        plt.title(f"{name} vs chlorophyll_a_mg_m3\nCorrelation: {corr_value:.2f}")
+        plt.xlabel("date")
+        plt.ylabel("Normalized y values")
+        plt.legend()
+
+        safe_name = name.replace("/", "_") 
+        
+        plt.savefig(line_dir / f"lines_{safe_name}.png")
+        plt.close() 
+                
+
 
 if __name__ == "__main__":
     main()
