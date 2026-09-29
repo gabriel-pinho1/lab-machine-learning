@@ -24,6 +24,7 @@ def main() -> None:
     args = parser.parse_args()
     
     df_raw = read_table(args.data)
+    df_raw["chlorophyll_a_mg_m3"] = np.log1p(df_raw["chlorophyll_a_mg_m3"])
     lagged_df = build_lagged_frame(df_raw)
     Y = lagged_df["chlorophyll_a_mg_m3"]
     X = lagged_df.drop(columns=["date", "chlorophyll_a_mg_m3"])
@@ -75,8 +76,8 @@ def main() -> None:
         y2 = df_raw_scaled['chlorophyll_a_mg_m3']
         corr_value = y1.corr(y2)
         plt.plot(x, y1, label = str(name))
-        plt.plot(x, y2, label ="chlorophyll_a_mg_m3")
-        plt.title(f"{name} vs chlorophyll_a_mg_m3\nCorrelation: {corr_value:.2f}")
+        plt.plot(x, y2, label ="log(chlorophyll_a_mg_m3)")
+        plt.title(f"{name} vs log(chlorophyll_a_mg_m3)\nCorrelation: {corr_value:.2f}")
         plt.xlabel("date")
         plt.ylabel("Normalized y values")
         plt.legend()
@@ -92,4 +93,4 @@ if __name__ == "__main__":
     main()
 
 # linha do terminal pra correr codigo atual:
-# python plots.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output scatter_plots
+# python plots.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output plots
