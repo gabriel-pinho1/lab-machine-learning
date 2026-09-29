@@ -75,17 +75,18 @@ def main() -> None:
         y1 = df_raw_scaled[name]
         y2 = df_raw_scaled['chlorophyll_a_mg_m3']
         corr_value = y1.corr(y2)
-        plt.plot(x, y1, label = str(name))
-        plt.plot(x, y2, label ="log(chlorophyll_a_mg_m3)")
-        plt.title(f"{name} vs log(chlorophyll_a_mg_m3)\nCorrelation: {corr_value:.2f}")
-        plt.xlabel("date")
-        plt.ylabel("Normalized y values")
-        plt.legend()
+        if abs(corr_value) >= 0.40:
+            plt.plot(x, y1, label = str(name))
+            plt.plot(x, y2, label ="log(chlorophyll_a_mg_m3)")
+            plt.title(f"{name} vs log(chlorophyll_a_mg_m3)\nCorrelation: {corr_value:.2f}")
+            plt.xlabel("date")
+            plt.ylabel("Normalized y values")
+            plt.legend()
 
-        safe_name = name.replace("/", "_") 
-        
-        plt.savefig(line_dir / f"lines_{safe_name}.png")
-        plt.close() 
+            safe_name = name.replace("/", "_") 
+            
+            plt.savefig(line_dir / f"lines_{safe_name}.png")
+            plt.close() 
                 
 
 
