@@ -109,16 +109,15 @@ def main() -> None:
 
     
         
-    r2_best = 0
-    j_best = 0
-    mae_best = 0
+    r2_best_lasso = 0
+    j_best_lasso = 0
+    mae_best_lasso = 0
 
     alphas_to_test = np.logspace(-3, 1, 50)
 
     for j in alphas_to_test:
         
         model = linear_model.Lasso(alpha=j)
-        #model = linear_model.LinearRegression()
         model.fit(X_train_scaled, Y_train_log)
         predictions_log = model.predict(X_val_scaled)
 
@@ -131,28 +130,116 @@ def main() -> None:
         print(f'alpha={j:.4f} | R^2: {r2:.4f} | MAE: {mae:.4f}')
         
         
-        if r2 > r2_best:
-            r2_best = r2
-            j_best = j
-            mae_best = mae
-            coefficients = pd.Series(model.coef_, index=X_train_scaled.columns)
+        if r2 > r2_best_lasso:
+            r2_best_lasso = r2
+            j_best_lasso = j
+            mae_best_lasso = mae
+            coefficients_lasso = pd.Series(model.coef_, index=X_train_scaled.columns)
             
-    zeroed_features = coefficients[coefficients == 0.0]
-    kept_features = coefficients[coefficients != 0.0]
-    print(f'alpha_best={j_best}')
-    print(f"Validation R^2_best: {r2_best:.4f}")
-    print(f"Validation MAE best: {mae_best:.4f} mg/m3")
-    print("--- Features Driven to Zero ---")
-    print(zeroed_features)
-    print("\n--- Features Kept in the Model ---")
-    print(kept_features) 
+ 
 
+    r2_best_ridge = 0
+    j_best_ridge = 0
+    mae_best_ridge = 0
+    alphas_ridge =[1.e-06, 1.e-05, 1.e-04, 1.e-03, 1.e-02, 1.e-01, 1.e+00, 1.e+01,
+      1.e+02, 1.e+03, 1.e+04, 1.e+05, 1.e+06]
+    
+    for j in alphas_ridge:
+        
+        model = linear_model.Ridge(alpha=j)
+        model.fit(X_train_scaled, Y_train_log)
+        predictions_log = model.predict(X_val_scaled)
+
+        real_predictions = np.expm1(predictions_log)
+        Y_val_real = np.expm1(Y_val_log)
+
+        r2 = r2_score(Y_val_real, real_predictions)
+        mae = mean_absolute_error(Y_val_real, real_predictions)
+
+        print(f'alpha={j:.4f} | R^2: {r2:.4f} | MAE: {mae:.4f}')
+        
+        
+        if r2 > r2_best_ridge:
+            r2_best_ridge = r2
+            j_best_ridge = j
+            mae_best_ridge = mae
+            coefficients_ridge = pd.Series(model.coef_, index=X_train_scaled.columns)
+            
+
+
+    r2_best_Elastic = 0
+    j_best_Elastic = 0
+    mae_best_Elastic = 0
+    l1_best_Elastic = 0
+    alphas_Elastic = np.logspace(-3, 1, 50) 
+    l1_ratios_to_test = [0.05, 0.1, 0.5, 0.7, 0.9, 0.99]
+  
+    for j in alphas_Elastic:
+        for k in l1_ratios_to_test:
+        
+            model = linear_model.ElasticNet(alpha=j, l1_ratio = k, max_iter=10000)
+            model.fit(X_train_scaled, Y_train_log)
+            predictions_log = model.predict(X_val_scaled)
+
+            real_predictions = np.expm1(predictions_log)
+            Y_val_real = np.expm1(Y_val_log)
+
+            r2 = r2_score(Y_val_real, real_predictions)
+            mae = mean_absolute_error(Y_val_real, real_predictions)
+
+            print(f'alpha={j:.4f} | L1 = {k:.4f} | R^2: {r2:.4f} | MAE: {mae:.4f}')
+            
+            
+            if r2 > r2_best_Elastic:
+                r2_best_Elastic = r2
+                j_best_Elastic = j
+                l1_best_Elastic = k
+                mae_best_Elastic = mae
+                coefficients_Elastic = pd.Series(model.coef_, index=X_train_scaled.columns)
+
+
+
+
+
+
+    zeroed_features_lasso = coefficients_lasso[coefficients_lasso == 0.0]
+    kept_features_lasso = coefficients_lasso[coefficients_lasso != 0.0]
+    print(f'\n----lasso-----\n')
+    print(f'alpha_best={j_best_lasso}')
+    print(f"Validation R^2_best: {r2_best_lasso:.4f}")
+    print(f"Validation MAE best: {mae_best_lasso:.4f} mg/m3")
+    print("--- Features Driven to Zero ---")
+    print(zeroed_features_lasso)
+    print("\n--- Features Kept in the Model ---")
+    print(kept_features_lasso)
+
+    importance_ridge = coefficients_ridge.abs()
+    sorted_importance = importance_ridge.sort_values(ascending=False)
+    print(f'\n----ridge-----\n')
+    print(f'alpha_best={j_best_ridge}')
+    print(f"Validation R^2_best: {r2_best_ridge:.4f}")
+    print(f"Validation MAE best: {mae_best_ridge:.4f} mg/m3")
+    print("\n--- Top 20 Most Important Features ---")
+    print(sorted_importance.head(20))
     X_train_scaled.to_csv(args.output, index=False)
+            
+    importance_Elastic = coefficients_Elastic.abs()
+    sorted_importance_Elastic = importance_Elastic.sort_values(ascending=False)
+    zeroed_features_Elastic = coefficients_Elastic[coefficients_Elastic == 0.0]
+    print(f'\n----Elastic-----\n')
+    print(f'alpha_best={j_best_Elastic}')
+    print(f'L1_best={l1_best_Elastic}')
+    print(f"Validation R^2_best: {r2_best_Elastic:.4f}")
+    print(f"Validation MAE best: {mae_best_Elastic:.4f} mg/m3")
+    print("\n--- Top 20 Most Important Features ---")
+    print(sorted_importance_Elastic.head(20))
+    print("--- Features Driven to Zero ---")
+    print(zeroed_features_Elastic)
 
 
 if __name__ == "__main__":
     main()
 
 # linha do terminal pra correr codigo atual:
-# python train.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output cleaned_data.csv
+# python train_alt.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output cleaned_data.csv
 
