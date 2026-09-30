@@ -12,7 +12,10 @@ transformation and output post-processing must remain explicit.
 from __future__ import annotations
 from build_lagged_features import build_lagged_frame, read_table
 import argparse
+import pickle
 import itertools
+import copy
+import gc
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -103,7 +106,8 @@ def main() -> None:
     X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns)
     X_val_scaled = pd.DataFrame(X_val_scaled, columns=X_val.columns)
    
-
+    del df_raw, df_lagged_copy, lagged_df, df_new_features, df_lag_sum, X, Y
+    gc.collect()
     
 
 
@@ -135,7 +139,7 @@ def main() -> None:
             j_best_lasso = j
             mae_best_lasso = mae
             coefficients_lasso = pd.Series(model.coef_, index=X_train_scaled.columns)
-            
+            best_lasso_model = copy.deepcopy(model)
  
 
     r2_best_ridge = 0
@@ -164,7 +168,7 @@ def main() -> None:
             j_best_ridge = j
             mae_best_ridge = mae
             coefficients_ridge = pd.Series(model.coef_, index=X_train_scaled.columns)
-            
+            best_ridge_model = copy.deepcopy(model)
 
 
     r2_best_Elastic = 0
@@ -177,7 +181,7 @@ def main() -> None:
     for j in alphas_Elastic:
         for k in l1_ratios_to_test:
         
-            model = linear_model.ElasticNet(alpha=j, l1_ratio = k, max_iter=10000)
+            model = linear_model.ElasticNet(alpha=j, l1_ratio = k, max_iter=50000)
             model.fit(X_train_scaled, Y_train_log)
             predictions_log = model.predict(X_val_scaled)
 
@@ -196,6 +200,8 @@ def main() -> None:
                 l1_best_Elastic = k
                 mae_best_Elastic = mae
                 coefficients_Elastic = pd.Series(model.coef_, index=X_train_scaled.columns)
+                best_Elastic_model = copy.deepcopy(model)
+
 
 
 
@@ -221,7 +227,7 @@ def main() -> None:
     print(f"Validation MAE best: {mae_best_ridge:.4f} mg/m3")
     print("\n--- Top 20 Most Important Features ---")
     print(sorted_importance.head(20))
-    X_train_scaled.to_csv(args.output, index=False)
+
             
     importance_Elastic = coefficients_Elastic.abs()
     sorted_importance_Elastic = importance_Elastic.sort_values(ascending=False)
@@ -236,10 +242,24 @@ def main() -> None:
     print("--- Features Driven to Zero ---")
     print(zeroed_features_Elastic)
 
+    artifacts = {
+        "lasso": best_lasso_model,
+        "ridge": best_ridge_model,
+        "elasticnet": best_Elastic_model,
+        "scaler": scaler,
+        "feature_names": X_train_scaled.columns.tolist()
+    }
+
+    # Save models next to the output data file
+    model_output_path = args.output.parent / "best_models.pkl"
+    with open(model_output_path, "wb") as f:
+        pickle.dump(artifacts, f)
+        
+    print(f"Models and scaler successfully saved to: {model_output_path}")
 
 if __name__ == "__main__":
     main()
 
 # linha do terminal pra correr codigo atual:
-# python train_alt.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output cleaned_data.csv
+# python train_alt.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output models
 
