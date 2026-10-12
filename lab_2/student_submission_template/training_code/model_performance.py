@@ -96,6 +96,13 @@ def main() -> None:
 
     X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns)
     X_val_scaled = pd.DataFrame(X_val_scaled, columns=X_val.columns)
+    
+    for col in X_train_scaled.columns:
+        if col.startswith("chlorophyll_a_mg_m3__lag_"):
+            continue  
+
+        X_train_scaled[col] = X_train_scaled[col].clip(-3, 3)
+        X_val_scaled[col] = X_val_scaled[col].clip(-3, 3)
 
     with open("path/to/model.pkl", "rb") as f:
         artifacts = pickle.load(f)

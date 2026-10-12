@@ -24,7 +24,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from scipy import stats
 TARGET = "chlorophyll_a_mg_m3"
-lag_vector = [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15]
+lag_vector = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
 NEW_LAGS = {
     TARGET: list(range(1, lag_vector[0])),
     "sst_c": list(range(0, lag_vector[1])),
@@ -40,7 +40,9 @@ NEW_LAGS = {
     "surface_pressure_hpa": list(range(0, lag_vector[11])),
     "turbidity_ntu": list(range(0, lag_vector[12])),
 }
-
+for name in list(NEW_LAGS.keys()):
+    if len(NEW_LAGS[name]) == 0:
+        del NEW_LAGS[name]
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -53,7 +55,7 @@ def main() -> None:
     df_raw = read_table(args.data)
     df_raw["chlorophyll_a_mg_m3"] = np.log1p(df_raw["chlorophyll_a_mg_m3"])
     lagged_df = build_lagged_frame(df_raw, NEW_LAGS)
-    raw_columns_names = [f"{col}__lag_0" for col in df_raw.drop(columns=["date", "chlorophyll_a_mg_m3"]).columns]
+    raw_columns_names = [f"{col}__lag_0" for col in df_raw.drop(columns=["date", "chlorophyll_a_mg_m3"]).columns if f"{col}__lag_0" in lagged_df.columns]
     
     raw_columns_names.append("chlorophyll_a_mg_m3__lag_1")
 
@@ -76,6 +78,7 @@ def main() -> None:
     raw_columns_names = [col for col in df_raw.columns if col != "date"]
     df_lag_sum = pd.DataFrame()
     new_columns = {}
+   
 
 
    
@@ -102,10 +105,16 @@ def main() -> None:
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_val_scaled = scaler.transform(X_val)
-
     X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns)
     X_val_scaled = pd.DataFrame(X_val_scaled, columns=X_val.columns)
-   
+    clip_limit = 3
+
+    for col in X_train_scaled.columns:
+        if col.startswith("chlorophyll_a_mg_m3__lag_"):
+            continue  
+
+        X_train_scaled[col] = X_train_scaled[col].clip(-3, 3)
+        X_val_scaled[col] = X_val_scaled[col].clip(-3, 3)
     del df_raw, df_lagged_copy, lagged_df, df_new_features, df_lag_sum, X, Y
     gc.collect()
     
@@ -170,7 +179,6 @@ def main() -> None:
             coefficients_ridge = pd.Series(model.coef_, index=X_train_scaled.columns)
             best_ridge_model = copy.deepcopy(model)
 
-
     r2_best_Elastic = 0
     j_best_Elastic = 0
     mae_best_Elastic = 0
@@ -178,7 +186,7 @@ def main() -> None:
     alphas_Elastic = np.logspace(-3, 1, 50) 
     l1_ratios_to_test = [0.05, 0.1, 0.5, 0.7, 0.9, 0.99]
   
-    for j in alphas_Elastic:
+    """ for j in alphas_Elastic:
         for k in l1_ratios_to_test:
         
             model = linear_model.ElasticNet(alpha=j, l1_ratio = k, max_iter=50000)
@@ -200,7 +208,7 @@ def main() -> None:
                 l1_best_Elastic = k
                 mae_best_Elastic = mae
                 coefficients_Elastic = pd.Series(model.coef_, index=X_train_scaled.columns)
-                best_Elastic_model = copy.deepcopy(model)
+                best_Elastic_model = copy.deepcopy(model) """
 
 
 
@@ -229,7 +237,7 @@ def main() -> None:
     print(sorted_importance.head(20))
 
             
-    importance_Elastic = coefficients_Elastic.abs()
+    """importance_Elastic = coefficients_Elastic.abs()
     sorted_importance_Elastic = importance_Elastic.sort_values(ascending=False)
     zeroed_features_Elastic = coefficients_Elastic[coefficients_Elastic == 0.0]
     print(f'\n----Elastic-----\n')
@@ -240,12 +248,12 @@ def main() -> None:
     print("\n--- Top 20 Most Important Features ---")
     print(sorted_importance_Elastic.head(20))
     print("--- Features Driven to Zero ---")
-    print(zeroed_features_Elastic)
+    print(zeroed_features_Elastic)"""
 
     artifacts = {
         "lasso": best_lasso_model,
         "ridge": best_ridge_model,
-        "elasticnet": best_Elastic_model,
+        #"elasticnet": best_Elastic_model,
         "scaler": scaler,
         "feature_names": X_train_scaled.columns.tolist()
     }
