@@ -1,0 +1,6 @@
+utilizo o new_lag ao inves de copiar coluna de um data frame para o outro pq o proprio compilador avisa q fzr isso cria uma estrutura defragmentada é mais lento para adicionar as colunas todas de uma vez dps do loop.
+
+    DataFrame is highly fragmented.  This is usually the result of calling `frame.insert` many times, which has poor performance.  Consider joining all columns at once using pd.concat(axis=1) instead. Toget a de-fragmented frame, use `newframe = frame.copy()`
+
+utilizo panda pra as colunas terem nome ao inves de extrair os dados diretamente pra uma matxriz, pra dps poder avaliar a importancia de cada variavel
+
