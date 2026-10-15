@@ -15,7 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 from pathlib import Path
-
+import gc
 import pandas as pd
 from scipy.stats import zscore
 
@@ -68,55 +68,81 @@ def main() -> None:
     }
 
     df_raw = read_table(args.data)
-    df_raw["chlorophyll_a_mg_m3"] = np.log1p(df_raw["chlorophyll_a_mg_m3"])
     df_lagged = build_lagged_frame(df_raw, lag_spec=defined_lags)
 
-    scaler = StandardScaler()
-
+    scaler_X = StandardScaler()
+    scaler_Y = StandardScaler()
 
     Y = df_lagged["chlorophyll_a_mg_m3"]
     X = df_lagged.drop(columns = ["date", "chlorophyll_a_mg_m3"])
 
-    '''raw_columns_names = [col for col in df_raw.columns if col != "date"]
-    df_lag_sum = pd.DataFrame()
-    new_columns = {}
+    #separating dataset into training, validation, and testing
+    lower_separation_idx = -3*365
+    higher_separation_idx = -1*365
 
-    for idx, name in enumerate(raw_columns_names):
-        
-        max_lag = 7
-        
-        for p in range(1, max_lag):
-            if name == "chlorophyll_a_mg_m3":
-            
-                cols_to_sum = [f"{name}__lag_{i}" for i in range(1, p)]
-            else:
-                cols_to_sum = [f"{name}__lag_{i}" for i in range(0, p)]
+    X_train, X_val, X_test = X.iloc[:lower_separation_idx], X.iloc[lower_separation_idx:higher_separation_idx], X.iloc[higher_separation_idx:]
+    Y_train, Y_val, Y_test = Y.iloc[:lower_separation_idx], Y.iloc[lower_separation_idx:higher_separation_idx], Y.iloc[higher_separation_idx:]
 
 
-            new_columns[f"row_sum_{name}_{p}_days"] = X[cols_to_sum].sum(axis=1)
-                
-    df_lag_sum = pd.DataFrame(new_columns) 
+    # Aplicar o fit apenas aos dados de treino e validacao
+    X_train_scaled = scaler_X.fit_transform(X_train)
+    X_test_scaled = scaler_X.transform(X_test)
+    X_val_scaled = scaler_X.fit_transform(X_val) 
 
-    X = pd.concat([X, df_lag_sum], axis=1)'''
-
-
-    separation_idx = -2*365
-    X_train, X_test = X.iloc[:separation_idx], X.iloc[separation_idx:]
-    Y_train, Y_test = Y.iloc[:separation_idx], Y.iloc[separation_idx:]
-
-
-    # Aplicar o fit apenas aos dados de teste
-    X_train_scaled = scaler.fit_transform(X_train)
 
     # COnverter em panda outra vez para reter o nome das colunas
-    X_train_scaled_pd = pd.DataFrame(X_train_scaled, columns= X_train.columns)
-    X_test_scaled = scaler.transform(X_test)
+
+    X_train_scaled = pd.DataFrame(X_train_scaled, columns= X_train.columns)
+    X_val_scaled = pd.DataFrame(X_val_scaled, columns= X_val.columns)    
+    X_test_scaled = pd.DataFrame(X_test_scaled, columns= X_test.columns)
 
     # Estou a definir que todos os valores cujo o resultado do fit.transform estejam para lá de -3 e 3 sejam 
     # limitados a -3 e 3 (porque estatisticamente só os outliers estão fora desse valor)
-    X_train_scaled = X_train_scaled.clip(-3, 3)
-    X_test_scaled = X_test_scaled.clip(-3, 3)
-    #X_train_scaled = X_train_scaled.to_csv(args.output, index=False)
+
+    for col in X_train_scaled.columns:
+            
+            if col.startswith("chlorophyll_a_mg_m3__lag_"):
+                # 1. Identify where the outliers are
+                train_outliers = (X_train_scaled[col] < -3) | (X_train_scaled[col] > 3)
+                val_outliers = (X_val_scaled[col] < -3) | (X_val_scaled[col] > 3)
+                test_outliers = (X_test_scaled[col] < -3) | (X_test_scaled[col] > 3)
+
+                train_avg_3_above = X_train_scaled[col].rolling(window=3, min_periods=1).mean().shift(1)
+                val_avg_3_above = X_val_scaled[col].rolling(window=3, min_periods=1).mean().shift(1)
+                test_avg_3_above = X_test_scaled[col].rolling(window=3, min_periods=1).mean().shift(1)
+
+                X_train_scaled.loc[train_outliers, col] = train_avg_3_above[train_outliers]
+                X_val_scaled.loc[val_outliers, col] = val_avg_3_above[val_outliers]
+                X_test_scaled.loc[test_outliers, col] = test_avg_3_above[test_outliers]
+                
+                X_train_scaled[col] = X_train_scaled[col].fillna(X_train_scaled[col].clip(-3, 3))
+                X_val_scaled[col] = X_val_scaled[col].fillna(X_val_scaled[col].clip(-3, 3)) 
+                X_test_scaled[col] = X_test_scaled[col].fillna(X_test_scaled[col].clip(-3, 3))
+
+            else:
+                X_train_scaled[col] = X_train_scaled[col].clip(-3, 3)
+                X_val_scaled[col] = X_val_scaled[col].clip(-3, 3)
+                X_test_scaled[col] = X_test_scaled[col].clip(-3, 3)
+
+
+
+    y_train_zscores = zscore(Y_train)
+    y_val_zscores = zscore(Y_val)
+
+    train_outliers = (y_train_zscores < -3) | (y_train_zscores > 3)
+    val_outliers = (y_val_zscores < -3) | (y_val_zscores > 3)
+
+    train_avg_3_above = Y_train.rolling(window=3, min_periods=1).mean().shift(1)
+    val_avg_3_above = Y_val.rolling(window=3, min_periods=1).mean().shift(1)
+
+    Y_train.loc[train_outliers] = train_avg_3_above[train_outliers]
+    Y_val.loc[val_outliers] = val_avg_3_above[val_outliers]
+
+
+    Y_train = Y_train.fillna(method='bfill')
+    Y_val = Y_val.fillna(method='bfill')
+
+
 
     vector_length_lasso = 20
     vector_length_ridge = 20
@@ -150,12 +176,12 @@ def main() -> None:
         #print("\n")
 
 
-        predicts_lasso = clf_lasso.predict(X_test_scaled)
-        predicts_lasso_true = np.expm1(predicts_lasso)
+        predicts_lasso = clf_lasso.predict(X_val_scaled)
 
-        Y_test_true = np.expm1(Y_test)
 
-        r2_lasso = r2_score(Y_test_true, predicts_lasso_true)
+
+
+        r2_lasso = r2_score(Y_val, predicts_lasso)
         alpha_list_lasso.append(alpha)
         r2_list_lasso.append(r2_lasso)
 
@@ -177,10 +203,10 @@ def main() -> None:
         clf_ridge = linear_model.Ridge(alpha)
         clf_ridge.fit(X_train_scaled, Y_train)
 
-        predicts_ridge = clf_ridge.predict(X_test_scaled)
-        predicts_ridge_true = np.expm1(predicts_ridge)
+        predicts_ridge = clf_ridge.predict(X_val_scaled)
 
-        r2_ridge = r2_score(Y_test_true, predicts_ridge_true)
+
+        r2_ridge = r2_score(Y_val, predicts_ridge)
 
         alpha_list_ridge.append(alpha)
         r2_list_ridge.append(r2_ridge)
@@ -233,4 +259,4 @@ if __name__ == "__main__":
 # python train.py --data ../data/chlorophyll_student_2015_2023.xlsx --output ../best_model/model.pkl
 
 # Para correr no entranto
-#python train.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output training.csv
+#python train_estavel.py --data ../../data/chlorophyll_student_2015_2023.xlsx -

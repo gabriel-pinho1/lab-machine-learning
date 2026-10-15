@@ -24,7 +24,7 @@ def main() -> None:
     args = parser.parse_args()
     
     df_raw = read_table(args.data)
-    df_raw["chlorophyll_a_mg_m3"] = np.log1p(df_raw["chlorophyll_a_mg_m3"])
+    df_raw["chlorophyll_a_mg_m3"] = df_raw["chlorophyll_a_mg_m3"]
     lagged_df = build_lagged_frame(df_raw)
     Y = lagged_df["chlorophyll_a_mg_m3"]
     X = lagged_df.drop(columns=["date", "chlorophyll_a_mg_m3"])
