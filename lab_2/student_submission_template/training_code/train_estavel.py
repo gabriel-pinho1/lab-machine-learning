@@ -46,7 +46,7 @@ def main() -> None:
 
     #for high_limit in high_limit_vector:
     high_limit = 7
-    low_limit = 1
+    low_limit = 0
 
     defined_lags = {
     "chlorophyll_a_mg_m3": list(range(1, high_limit)),
@@ -165,26 +165,9 @@ def main() -> None:
         clf_lasso.fit(X_train_scaled, Y_train)
         
 
-        #coeficients = pd.Series(clf_lasso.coef_, index= X_train_scaled.columns)
-        #print("Descarded Variables\n")
-        #descarded = coeficients[coeficients == 0.0]
-        #print(descarded)
-        #print("\n")
-        #print("Non-Zero Coeficients\n")
-        #saved = coeficients[coeficients != 0]
-        #print(saved)
-        #print("\n")
-
-
         predicts_lasso = clf_lasso.predict(X_val_scaled)
 
-
-
-
         r2_lasso = r2_score(Y_val, predicts_lasso)
-        alpha_list_lasso.append(alpha)
-        r2_list_lasso.append(r2_lasso)
-
 
         if r2_lasso > best_r2_lasso:
             best_r2_lasso = r2_lasso
@@ -205,17 +188,45 @@ def main() -> None:
 
         predicts_ridge = clf_ridge.predict(X_val_scaled)
 
-
         r2_ridge = r2_score(Y_val, predicts_ridge)
 
-        alpha_list_ridge.append(alpha)
-        r2_list_ridge.append(r2_ridge)
+
 
         if r2_ridge > best_r2_ridge:
             best_r2_ridge = r2_ridge
             best_alpha_ridge = alpha
             mae_best_ridge = mean_absolute_error(Y_val, predicts_ridge)
             coefficients_ridge = pd.Series(clf_ridge.coef_, index=X_train_scaled.columns)
+
+
+    #ridge after lasso validation
+    kept_features_lasso = coefficients_lasso != 0.0
+    
+    X_train_cut = X_train_scaled.loc[:, kept_features_lasso]
+    X_test_cut =  X_test_scaled.loc[:, kept_features_lasso]
+    X_val_cut =  X_val_scaled.loc[:, kept_features_lasso]
+
+    best_r2_ridge_lasso = -float('inf')  
+    best_alpha_ridge_lasso = None
+
+    for alpha in alpha_ridge_defined:
+
+            clf_ridge = linear_model.Ridge(alpha)
+            clf_ridge.fit(X_train_cut, Y_train)
+
+            predicts_ridge_lasso = clf_ridge.predict(X_val_cut)
+
+    
+            r2_ridge_lasso = r2_score(Y_val, predicts_ridge_lasso)
+    
+ 
+    
+            if r2_ridge_lasso > best_r2_ridge_lasso:
+                best_r2_ridge_lasso = r2_ridge_lasso
+                best_alpha_ridge_lasso = alpha
+                mae_best_ridge_lasso = mean_absolute_error(Y_val, predicts_ridge_lasso)
+                coefficients_ridge_lasso = pd.Series(clf_ridge.coef_, index=X_train_cut.columns)
+
 
     #testing:
 
@@ -237,6 +248,17 @@ def main() -> None:
 
     r2_ridge_test = r2_score(Y_test, predicts_ridge)
     mae_ridge_test = mean_absolute_error(Y_test, predicts_ridge)
+
+
+    X_train_cut_full = pd.concat([X_train_cut, X_val_cut])
+  
+
+    clf_ridge = linear_model.Ridge(alpha=best_alpha_ridge_lasso, max_iter=150000)
+    clf_ridge.fit(X_train_cut_full, Y_train_full)
+    predicts_ridge_lasso = clf_ridge.predict(X_test_cut)
+
+    r2_ridge_lasso_test = r2_score(Y_test, predicts_ridge)
+    mae_ridge_lasso_test = mean_absolute_error(Y_test, predicts_ridge)
 
     print(f"validation results: \n")
 
@@ -263,6 +285,16 @@ def main() -> None:
     print(sorted_importance.head(20))
 
 
+    importance_ridge_lasso = coefficients_ridge_lasso.abs()
+    sorted_importance = importance_ridge_lasso.sort_values(ascending=False)
+    print(f'\n----ridge_lasso-----\n')
+    print(f'alpha_best={best_alpha_ridge_lasso}')
+    print(f"Validation R^2_best: {best_r2_ridge_lasso:.4f}")
+    print(f"Validation MAE best: {mae_best_ridge_lasso:.4f} mg/m3")
+    print("\n--- Top 20 Most Important Features ---")
+    print(sorted_importance.head(20))
+
+
     print(f"test results: \n")
 
     print(f'\n----lasso-----\n')
@@ -272,6 +304,10 @@ def main() -> None:
     print(f'\n----ridge-----\n')
     print(f"Test R^2: {r2_ridge_test:.4f}")
     print(f"Test MAE: {mae_ridge_test:.4f} mg/m3")
+
+    print(f'\n----ridge_lasso-----\n')
+    print(f"Test R^2: {r2_ridge_lasso_test:.4f}")
+    print(f"Test MAE: {mae_ridge_lasso_test:.4f} mg/m3")
 
 
 
