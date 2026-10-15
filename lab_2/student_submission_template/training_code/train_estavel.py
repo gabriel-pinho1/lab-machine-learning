@@ -23,7 +23,7 @@ from build_lagged_features import read_table, build_lagged_frame
 
 from sklearn.preprocessing import StandardScaler
 from sklearn import linear_model
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_absolute_error
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -139,11 +139,11 @@ def main() -> None:
     Y_val.loc[val_outliers] = val_avg_3_above[val_outliers]
 
 
-    Y_train = Y_train.fillna(method='bfill')
-    Y_val = Y_val.fillna(method='bfill')
+    Y_train = Y_train.bfill()
+    Y_val = Y_val.bfill()
 
 
-
+    #model validation
     vector_length_lasso = 20
     vector_length_ridge = 20
 
@@ -160,7 +160,7 @@ def main() -> None:
     alpha_ridge_defined = np.linspace(1e-16, 1e-15, vector_length_ridge)
 
     for alpha in alpha_lasso_defined:
-        clf_lasso = linear_model.Lasso(alpha)
+
         clf_lasso = linear_model.Lasso(alpha=alpha, max_iter=150000)
         clf_lasso.fit(X_train_scaled, Y_train)
         
@@ -189,8 +189,8 @@ def main() -> None:
         if r2_lasso > best_r2_lasso:
             best_r2_lasso = r2_lasso
             best_alpha_lasso = alpha
-    best_alpha_for_lag_lasso.append(best_alpha_lasso)
-    best_r2_for_lag_lasso.append(best_r2_lasso)
+            mae_best_lasso = mean_absolute_error(Y_val, predicts_lasso)
+            coefficients_lasso = pd.Series(clf_lasso.coef_, index=X_train_scaled.columns)
 
 
     print(f"The best Lasso model has alpha={best_alpha_lasso} with a R2 of {best_r2_lasso})")
@@ -214,14 +214,80 @@ def main() -> None:
         if r2_ridge > best_r2_ridge:
             best_r2_ridge = r2_ridge
             best_alpha_ridge = alpha
+            mae_best_ridge = mean_absolute_error(Y_val, predicts_ridge)
+            coefficients_ridge = pd.Series(clf_ridge.coef_, index=X_train_scaled.columns)
 
-    best_alpha_for_lag_ridge.append(best_alpha_ridge)
-    best_r2_for_lag_ridge.append(best_r2_ridge)
+    #testing:
 
-    print(f"The best Ridge model has alpha={best_alpha_ridge} with a R2 of {best_r2_ridge})")
+    X_train_full = pd.concat([X_train_scaled, X_val_scaled])
+    Y_train_full = pd.concat([Y_train, Y_val])
 
 
-    plt.plot(alpha_list_lasso, r2_list_lasso, marker='o', linestyle='-')
+    clf_lasso = linear_model.Lasso(alpha=best_alpha_lasso, max_iter=150000)
+    clf_lasso.fit(X_train_full, Y_train_full)
+    predicts_lasso = clf_lasso.predict(X_test_scaled)
+
+
+    r2_lasso_test = r2_score(Y_test, predicts_lasso)
+    mae_lasso_test = mean_absolute_error(Y_test, predicts_lasso)
+
+    clf_ridge = linear_model.Ridge(alpha=best_alpha_ridge, max_iter=150000)
+    clf_ridge.fit(X_train_full, Y_train_full)
+    predicts_ridge = clf_ridge.predict(X_test_scaled)
+
+    r2_ridge_test = r2_score(Y_test, predicts_ridge)
+    mae_ridge_test = mean_absolute_error(Y_test, predicts_ridge)
+
+    print(f"validation results: \n")
+
+
+    zeroed_features_lasso = coefficients_lasso[coefficients_lasso == 0.0]
+    kept_features_lasso = coefficients_lasso[coefficients_lasso != 0.0]
+    print(f'\n----lasso-----\n')
+    print(f'alpha_best={best_alpha_lasso}')
+    print(f"Validation R^2_best: {best_r2_lasso:.4f}")
+    print(f"Validation MAE best: {mae_best_lasso:.4f} mg/m3")
+    print("--- Features Driven to Zero ---")
+    print(zeroed_features_lasso)
+    print("\n--- Features Kept in the Model ---")
+    print(kept_features_lasso)
+
+
+    importance_ridge = coefficients_ridge.abs()
+    sorted_importance = importance_ridge.sort_values(ascending=False)
+    print(f'\n----ridge-----\n')
+    print(f'alpha_best={best_alpha_ridge}')
+    print(f"Validation R^2_best: {best_r2_ridge:.4f}")
+    print(f"Validation MAE best: {mae_best_ridge:.4f} mg/m3")
+    print("\n--- Top 20 Most Important Features ---")
+    print(sorted_importance.head(20))
+
+
+    print(f"test results: \n")
+
+    print(f'\n----lasso-----\n')
+    print(f"Test R^2: {r2_lasso_test:.4f}")
+    print(f"Test MAE: {mae_lasso_test:.4f} mg/m3")
+
+    print(f'\n----ridge-----\n')
+    print(f"Test R^2: {r2_ridge_test:.4f}")
+    print(f"Test MAE: {mae_ridge_test:.4f} mg/m3")
+
+
+
+
+
+
+
+
+
+
+
+
+    #print(f"The best Ridge model has alpha={best_alpha_ridge} with a R2 of {best_r2_ridge})")
+
+
+    '''plt.plot(alpha_list_lasso, r2_list_lasso, marker='o', linestyle='-')
     plt.xlabel("Alpha (Lambda)")
     plt.ylabel("R2 Score")
     plt.title(f"Evolution of R2 with alpha for Lasso")
@@ -234,7 +300,7 @@ def main() -> None:
     plt.ylabel("R2 Score")
     plt.title(f"Evolution of R2 with alpha for Ridge")
     plt.grid(True)
-    plt.savefig(f"grafico_r2_vs_alpha_ridge_lag_{high_limit}.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"grafico_r2_vs_alpha_ridge_lag_{high_limit}.png", dpi=300, bbox_inches='tight')'''
 
     '''plt.figure(figsize=(8, 6))
     plt.plot(high_limit_vector,best_r2_for_lag_lasso , marker='o', linestyle='-')
@@ -259,4 +325,4 @@ if __name__ == "__main__":
 # python train.py --data ../data/chlorophyll_student_2015_2023.xlsx --output ../best_model/model.pkl
 
 # Para correr no entranto
-#python train_estavel.py --data ../../data/chlorophyll_student_2015_2023.xlsx -
+#python train_estavel.py --data ../../data/chlorophyll_student_2015_2023.xlsx 
