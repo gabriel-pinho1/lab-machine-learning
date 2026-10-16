@@ -24,6 +24,7 @@ from build_lagged_features import read_table, build_lagged_frame
 from sklearn.preprocessing import StandardScaler
 from sklearn import linear_model
 from sklearn.metrics import r2_score, mean_absolute_error
+from sklearn.model_selection import TimeSeriesSplit
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -140,8 +141,8 @@ def main() -> None:
     Y_val.loc[val_outliers] = val_avg_3_above[val_outliers]
 
 
-    Y_train = Y_train.bfill()
-    Y_val = Y_val.bfill()
+    Y_train = Y_train.ffill()
+    Y_val = Y_val.ffill()
 
 
     #model validation
@@ -235,6 +236,7 @@ def main() -> None:
 
 
     X_train_full_raw = pd.concat([X_train, X_val])
+    #Y_train_full = pd.concat([Y_train, np.log1p(Y_val)])
     Y_train_full = pd.concat([Y_train, np.log1p(Y_val)])
 
     scaler_final = StandardScaler()
