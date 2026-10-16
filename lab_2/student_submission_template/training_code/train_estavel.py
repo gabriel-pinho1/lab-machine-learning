@@ -49,19 +49,19 @@ def main() -> None:
     low_limit = 0
 
     defined_lags = {
-    "chlorophyll_a_mg_m3": list(range(1, high_limit)),
-    "sst_c": list(range(low_limit, high_limit)),
-    "par_umol_m2_s" : list(range(low_limit,high_limit)), 
-    "nitrate_umol_l" : list(range(low_limit,high_limit)),
-    "wind_speed_m_s" : list(range(low_limit,high_limit)),
-    "upwelling_index" : list(range(low_limit,high_limit)),
-    "mixed_layer_depth_m" : list(range(low_limit,high_limit)),
-    "salinity_psu" : list(range(low_limit,high_limit)),
-    "current_speed_m_s" : list(range(low_limit,high_limit)),
-    "river_discharge_index" : list(range(low_limit,high_limit)),
-    "cloud_fraction" : list(range(low_limit,high_limit)),
-    "surface_pressure_hpa" : list(range(low_limit,high_limit)),
-    "turbidity_ntu" : list(range(low_limit,high_limit)),
+    "chlorophyll_a_mg_m3": list(range(1, 7)),
+    "sst_c": list(range(low_limit, 7)),
+    "par_umol_m2_s" : list(range(low_limit, 6)), 
+    "nitrate_umol_l" : list(range(low_limit,7)),
+    "wind_speed_m_s" : list(range(1, 6)),
+    "upwelling_index" : list(range(1, 6)),
+    "mixed_layer_depth_m" : list(range(low_limit, 6)),
+    #"salinity_psu" : list(range(low_limit,high_limit)),
+    "current_speed_m_s" : list(range(2, 4)),
+    "river_discharge_index" : list(range(2,7)),
+    "cloud_fraction" : list(range(4, 12)),
+    #"surface_pressure_hpa" : list(range(low_limit,high_limit)),
+    "turbidity_ntu" : list(range(1, 7)),
     #"sst_c": [1, 2, 3],                     # Temperatura de ontem, anteontem e há 3 dias
     #"wind_speed_m_s": [1, 7],               # Vento de ontem e da semana passada (exemplo)
     # Podes adicionar mais variáveis aqui...
