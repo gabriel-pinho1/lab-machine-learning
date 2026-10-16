@@ -257,8 +257,8 @@ def main() -> None:
     clf_ridge.fit(X_train_cut_full, Y_train_full)
     predicts_ridge_lasso = clf_ridge.predict(X_test_cut)
 
-    r2_ridge_lasso_test = r2_score(Y_test, predicts_ridge)
-    mae_ridge_lasso_test = mean_absolute_error(Y_test, predicts_ridge)
+    r2_ridge_lasso_test = r2_score(Y_test, predicts_ridge_lasso)
+    mae_ridge_lasso_test = mean_absolute_error(Y_test, predicts_ridge_lasso)
 
     print(f"validation results: \n")
 
