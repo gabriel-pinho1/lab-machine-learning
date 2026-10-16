@@ -206,7 +206,6 @@ def main() -> None:
     kept_features_lasso = coefficients_lasso != 0.0
     
     X_train_cut = X_train_scaled.loc[:, kept_features_lasso]
-    X_test_cut =  X_test_scaled.loc[:, kept_features_lasso]
     X_val_cut =  X_val_scaled.loc[:, kept_features_lasso]
 
     best_r2_ridge_lasso = -float('inf')  
@@ -233,9 +232,35 @@ def main() -> None:
 
     #testing:
 
-    X_train_full = pd.concat([X_train_scaled, X_val_scaled])
+
+
+    X_train_full_raw = pd.concat([X_train, X_val])
     Y_train_full = pd.concat([Y_train, np.log1p(Y_val)])
 
+    scaler_final = StandardScaler()
+    X_train_full_scaled = scaler_final.fit_transform(X_train_full_raw)
+    X_test_scaled_final = scaler_final.transform(X_test)
+    
+    X_train_full = pd.DataFrame(X_train_full_scaled, columns=X_train_full_raw.columns)
+    X_test_scaled = pd.DataFrame(X_test_scaled_final, columns=X_test.columns)
+
+    for col in X_train_full.columns:
+        if col.startswith("chlorophyll_a_mg_m3__lag_"):
+            train_full_outliers = (X_train_full[col] < -3) | (X_train_full[col] > 3)
+            test_outliers = (X_test_scaled[col] < -3) | (X_test_scaled[col] > 3)
+
+            train_full_avg_3_above = X_train_full[col].rolling(window=3, min_periods=1).mean().shift(1)
+            test_avg_3_above = X_test_scaled[col].rolling(window=3, min_periods=1).mean().shift(1)
+
+            X_train_full.loc[train_full_outliers, col] = train_full_avg_3_above[train_full_outliers]
+            X_test_scaled.loc[test_outliers, col] = test_avg_3_above[test_outliers]
+            
+            X_train_full[col] = X_train_full[col].fillna(X_train_full[col].clip(-3, 3))
+            X_test_scaled[col] = X_test_scaled[col].fillna(X_test_scaled[col].clip(-3, 3))
+
+        else:
+            X_train_full[col] = X_train_full[col].clip(-3, 3)
+            X_test_scaled[col] = X_test_scaled[col].clip(-3, 3)
 
     clf_lasso = linear_model.Lasso(alpha=best_alpha_lasso, max_iter=150000)
     clf_lasso.fit(X_train_full, Y_train_full)
@@ -253,7 +278,8 @@ def main() -> None:
     mae_ridge_test = mean_absolute_error(Y_test, predicts_ridge)
 
 
-    X_train_cut_full = pd.concat([X_train_cut, X_val_cut])
+    X_train_cut_full =  X_train_full.loc[:, kept_features_lasso]
+    X_test_cut =  X_test_scaled.loc[:, kept_features_lasso]
   
 
     clf_ridge = linear_model.Ridge(alpha=best_alpha_ridge_lasso, max_iter=150000)
