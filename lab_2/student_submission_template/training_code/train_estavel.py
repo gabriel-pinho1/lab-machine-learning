@@ -68,6 +68,7 @@ def main() -> None:
     }
 
     df_raw = read_table(args.data)
+    df_raw["chlorophyll_a_mg_m3"] = np.log1p(df_raw["chlorophyll_a_mg_m3"])
     df_lagged = build_lagged_frame(df_raw, lag_spec=defined_lags)
 
     scaler_X = StandardScaler()
@@ -87,7 +88,7 @@ def main() -> None:
     # Aplicar o fit apenas aos dados de treino e validacao
     X_train_scaled = scaler_X.fit_transform(X_train)
     X_test_scaled = scaler_X.transform(X_test)
-    X_val_scaled = scaler_X.fit_transform(X_val) 
+    X_val_scaled = scaler_X.transform(X_val) 
 
 
     # COnverter em panda outra vez para reter o nome das colunas
@@ -158,15 +159,17 @@ def main() -> None:
 
     alpha_lasso_defined = np.logspace(-4, -2, vector_length_lasso)
     alpha_ridge_defined = np.linspace(1e-16, 1e-15, vector_length_ridge)
+    Y_val = np.expm1(Y_val)
+    Y_test = np.expm1(Y_test)
 
     for alpha in alpha_lasso_defined:
 
         clf_lasso = linear_model.Lasso(alpha=alpha, max_iter=150000)
         clf_lasso.fit(X_train_scaled, Y_train)
         
-
-        predicts_lasso = clf_lasso.predict(X_val_scaled)
-
+        
+        predicts_lasso = np.expm1(clf_lasso.predict(X_val_scaled))
+        
         r2_lasso = r2_score(Y_val, predicts_lasso)
 
         if r2_lasso > best_r2_lasso:
@@ -186,7 +189,7 @@ def main() -> None:
         clf_ridge = linear_model.Ridge(alpha)
         clf_ridge.fit(X_train_scaled, Y_train)
 
-        predicts_ridge = clf_ridge.predict(X_val_scaled)
+        predicts_ridge = np.expm1(clf_ridge.predict(X_val_scaled))
 
         r2_ridge = r2_score(Y_val, predicts_ridge)
 
@@ -214,7 +217,7 @@ def main() -> None:
             clf_ridge = linear_model.Ridge(alpha)
             clf_ridge.fit(X_train_cut, Y_train)
 
-            predicts_ridge_lasso = clf_ridge.predict(X_val_cut)
+            predicts_ridge_lasso = np.expm1(clf_ridge.predict(X_val_cut))
 
     
             r2_ridge_lasso = r2_score(Y_val, predicts_ridge_lasso)
@@ -231,12 +234,12 @@ def main() -> None:
     #testing:
 
     X_train_full = pd.concat([X_train_scaled, X_val_scaled])
-    Y_train_full = pd.concat([Y_train, Y_val])
+    Y_train_full = pd.concat([Y_train, np.log1p(Y_val)])
 
 
     clf_lasso = linear_model.Lasso(alpha=best_alpha_lasso, max_iter=150000)
     clf_lasso.fit(X_train_full, Y_train_full)
-    predicts_lasso = clf_lasso.predict(X_test_scaled)
+    predicts_lasso = np.expm1(clf_lasso.predict(X_test_scaled))
 
 
     r2_lasso_test = r2_score(Y_test, predicts_lasso)
@@ -244,7 +247,7 @@ def main() -> None:
 
     clf_ridge = linear_model.Ridge(alpha=best_alpha_ridge, max_iter=150000)
     clf_ridge.fit(X_train_full, Y_train_full)
-    predicts_ridge = clf_ridge.predict(X_test_scaled)
+    predicts_ridge = np.expm1(clf_ridge.predict(X_test_scaled))
 
     r2_ridge_test = r2_score(Y_test, predicts_ridge)
     mae_ridge_test = mean_absolute_error(Y_test, predicts_ridge)
@@ -255,10 +258,10 @@ def main() -> None:
 
     clf_ridge = linear_model.Ridge(alpha=best_alpha_ridge_lasso, max_iter=150000)
     clf_ridge.fit(X_train_cut_full, Y_train_full)
-    predicts_ridge_lasso = clf_ridge.predict(X_test_cut)
+    predicts_ridge_lasso = np.expm1(clf_ridge.predict(X_test_cut))
 
-    r2_ridge_lasso_test = r2_score(Y_test, predicts_ridge)
-    mae_ridge_lasso_test = mean_absolute_error(Y_test, predicts_ridge)
+    r2_ridge_lasso_test = r2_score(Y_test, predicts_ridge_lasso)
+    mae_ridge_lasso_test = mean_absolute_error(Y_test, predicts_ridge_lasso)
 
     print(f"validation results: \n")
 
