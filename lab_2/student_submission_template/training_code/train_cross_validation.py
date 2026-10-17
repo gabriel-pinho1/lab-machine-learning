@@ -43,10 +43,36 @@ def main() -> None:
     best_r2_for_lag_ridge = []
 
     # Meter aqui o for
-    high_limit_vector = range(4, 10)
+    #high_limit_vector = range(4, 10)
+
+
+
+    df_raw = read_table(args.data)
+
+    # Applying the log only to the chlorophyll to smooth, but not eliminate, the spikes
+    df_raw["chlorophyll_a_mg_m3"] = np.log1p(df_raw["chlorophyll_a_mg_m3"])
+
+    # Listing only the columns to which a Moving Average will be aplied since they have a lot of daily noise
+    exogenous_cols_mv = [col for col in df_raw.columns if col in ["wind_speed_m_s", "upwelling_index", "current_speed_m_s", "cloud_fraction", "turbidity_ntu"]]
+
+    # Moving average days
+    window_size = 3
+
+    for feature in (exogenous_cols_mv):
+        # The min_periods tells the function to only use the days it has available to performe
+        #the moving average, assuring that for the first 2 days there are no problems
+        df_raw[feature] = df_raw[feature].rolling(window=window_size, min_periods=1).mean()
+
+    # Adding new columns that relate variables (teste, depois logo se vê)
+
+    df_raw["nitrate_x_par"] = df_raw["nitrate_umol_l"] * df_raw["par_umol_m2_s"]
+    df_raw["wind_x_upwelling"] = df_raw["wind_speed_m_s"] * df_raw["upwelling_index"]
+    df_raw["river_div_turbidity"] = df_raw["river_discharge_index"] / (df_raw["turbidity_ntu"] + 1)
+
+    # Defining the lag list accounting for the new columns there were created
 
     #for high_limit in high_limit_vector:
-    high_limit = 7
+    high_limit = 15
     low_limit = 0
 
     defined_lags = {
@@ -63,20 +89,22 @@ def main() -> None:
     "cloud_fraction" : list(range(low_limit,high_limit)),
     "surface_pressure_hpa" : list(range(low_limit,high_limit)),
     "turbidity_ntu" : list(range(low_limit,high_limit)),
+    "nitrate_x_par" : list(range(low_limit,high_limit)),
+    "wind_x_upwelling" : list(range(low_limit,high_limit)),
+    "river_div_turbidity" : list(range(low_limit,high_limit))
     #"sst_c": [1, 2, 3],                     # Temperatura de ontem, anteontem e há 3 dias
     #"wind_speed_m_s": [1, 7],               # Vento de ontem e da semana passada (exemplo)
     # Podes adicionar mais variáveis aqui...
     }
 
-    df_raw = read_table(args.data)
-    df_raw["chlorophyll_a_mg_m3"] = np.log1p(df_raw["chlorophyll_a_mg_m3"])
     df_lagged = build_lagged_frame(df_raw, lag_spec=defined_lags)
 
-    scaler_X = StandardScaler()
-    scaler_Y = StandardScaler()
+
+
 
     Y = df_lagged["chlorophyll_a_mg_m3"]
     X = df_lagged.drop(columns = ["date", "chlorophyll_a_mg_m3"])
+
 
     # Last year of all is the final test
     test_size = 365
@@ -85,6 +113,12 @@ def main() -> None:
     X_cv, X_test = X.iloc[:-test_size].copy(), X.iloc[:-test_size].copy()
     Y_cv, Y_test = Y.iloc[:-test_size].copy(), Y.iloc[:-test_size].copy()
 
+    # Guarantee that there are no NaNs due to the number os lags chosen
+    X_cv = X_cv.ffill().bfill()
+    X_test = X_test.ffill().bfill()
+    Y_cv = Y_cv.ffill().bfill()
+    Y_test = Y_test.ffill().bfill()
+
     # Assuming that the log already compresses the outliers, so no z_score (for now)
 
     tscv = TimeSeriesSplit(n_splits = 4) # Creats 4 different temproal windows for the cross validation
@@ -92,7 +126,7 @@ def main() -> None:
     vector_length_lasso = 50
     vector_length_ridge = 50
     alpha_lasso_defined = np.logspace(-4, -2, vector_length_lasso)
-    alpha_ridge_defined = np.logspace(-6, -2, vector_length_ridge)
+    alpha_ridge_defined = np.logspace(-2, 4, vector_length_ridge)
 
 
     # Starting here the optimization using cross validation
@@ -104,14 +138,16 @@ def main() -> None:
 
         for train_index, val_index in tscv.split(X_cv):
             X_train_fold, X_val_fold = X_cv.iloc[train_index].copy(), X_cv.iloc[val_index].copy()
+            
             Y_train_fold, Y_val_fold = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
             
-            # Scaler ajustado APENAS aos dados de treino desta janela específica
+            # Scalling the train data
             scaler = StandardScaler()
             X_train_fold_scaled = pd.DataFrame(scaler.fit_transform(X_train_fold), columns=X_train_fold.columns)
+            # scalling based on the mean of the test data p
             X_val_fold_scaled = pd.DataFrame(scaler.transform(X_val_fold), columns=X_val_fold.columns)
             
-            # Clipping dos outliers nos features (X) a +/- 3 desvios padrão
+            # Clipping the outliers for both test and validation data
             X_train_fold_scaled = X_train_fold_scaled.clip(-3, 3)
             X_val_fold_scaled = X_val_fold_scaled.clip(-3, 3)
             
@@ -195,7 +231,7 @@ def main() -> None:
     X_cv_scaled_final = pd.DataFrame(scaler_final.fit_transform(X_cv), columns=X_cv.columns).clip(-3, 3)
     X_test_scaled = pd.DataFrame(scaler_final.transform(X_test), columns=X_test.columns).clip(-3, 3)
 
-    # Re-treinar o Lasso com o melhor alpha no passado TODO
+    # Re-treinar o Lasso com o melhor alpha no passado todo
     clf_lasso_test = linear_model.Lasso(alpha=best_alpha_lasso, max_iter=150000)
     clf_lasso_test.fit(X_cv_scaled_final, Y_cv)
     predicts_lasso_test = np.expm1(clf_lasso_test.predict(X_test_scaled))
