@@ -113,8 +113,8 @@ def main() -> None:
     test_size = 365
 
     # cv refers to cross validation
-    X_cv, X_test = X.iloc[:-test_size].copy(), X.iloc[:-test_size].copy()
-    Y_cv, Y_test = Y.iloc[:-test_size].copy(), Y.iloc[:-test_size].copy()
+    X_cv, X_test = X.iloc[:-test_size].copy(), X.iloc[-test_size:].copy()
+    Y_cv, Y_test = Y.iloc[:-test_size].copy(), Y.iloc[-test_size:].copy()
 
 
     # Assuming that the log already compresses the outliers, so no z_score (for now)
@@ -296,7 +296,40 @@ def main() -> None:
     print(f"Test R^2: {r2_ridge_lasso_test:.4f}")
     print(f"Test MAE: {mae_ridge_lasso_test:.4f} mg/m3")
 
+    # ------------------ Plotting Test Predictions vs Real ------------------
+    Y_test_real = np.expm1(Y_test)
+    
+    plt.figure(figsize=(14, 6))
+    
+    # Subplot 1: Timeline comparison
+    plt.subplot(1, 2, 1)
+    plt.plot(Y_test_real.values, label='Real Values', color='tab:blue', alpha=0.7)
+    plt.plot(predicts_ridge_lasso_test, label='Predictions (Ridge-Lasso)', color='tab:orange', alpha=0.7)
+    plt.title("Test Set: Real vs Predicted (Timeline)")
+    plt.xlabel("Days in Test Set")
+    plt.ylabel("Chlorophyll a (mg/m3)")
+    plt.legend()
+    
+    # Subplot 2: Scatter correlation
+    plt.subplot(1, 2, 2)
+    plt.scatter(Y_test_real.values, predicts_ridge_lasso_test, alpha=0.5, color='tab:green', s=15)
+    
+    # Add y=x ideal fit reference line
+    max_val = max(Y_test_real.max(), predicts_ridge_lasso_test.max())
+    min_val = min(Y_test_real.min(), predicts_ridge_lasso_test.min())
+    plt.plot([min_val, max_val], [min_val, max_val], 'r--', label='Ideal Fit (y=x)')
+    
+    plt.title(f"Test Set Correlation (R² = {r2_ridge_lasso_test:.2f})")
+    plt.xlabel("Real Chlorophyll a (mg/m3)")
+    plt.ylabel("Predicted Chlorophyll a (mg/m3)")
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig("test_predictions_vs_real.png", dpi=300, bbox_inches='tight')
+    plt.show()
+    # -----------------------------------------------------------------------
 
+    # Training the model using the obtained parameters on the last year (2023)
     # Training the model using the obtained parameters on the last year (2023)
 
     X_total = pd.concat([X_cv, X_test])
