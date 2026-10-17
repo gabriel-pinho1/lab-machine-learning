@@ -65,10 +65,10 @@ def main() -> None:
 
     # Adding new columns that relate variables (teste, depois logo se vê)
 
-    df_raw["nitrate_x_par"] = df_raw["nitrate_umol_l"] * df_raw["par_umol_m2_s"]
-    df_raw["wind_x_upwelling"] = df_raw["wind_speed_m_s"] * df_raw["upwelling_index"]
-    df_raw["river_div_turbidity"] = df_raw["river_discharge_index"] / (df_raw["turbidity_ntu"] + 1)
-    df_raw["sst_c_x_nitrate"] = df_raw["sst_c"] * df_raw["nitrate_umol_l"]
+    #df_raw["nitrate_x_par"] = df_raw["nitrate_umol_l"] * df_raw["par_umol_m2_s"]
+    #df_raw["wind_x_upwelling"] = df_raw["wind_speed_m_s"] * df_raw["upwelling_index"]
+    #df_raw["river_div_turbidity"] = df_raw["river_discharge_index"] / (df_raw["turbidity_ntu"] + 1)
+    #df_raw["sst_c_x_nitrate"] = df_raw["sst_c"] * df_raw["nitrate_umol_l"]
 
     # Defining the lag list accounting for the new columns there were created
 
@@ -90,10 +90,10 @@ def main() -> None:
     "cloud_fraction" : list(range(low_limit,high_limit)),
     "surface_pressure_hpa" : list(range(low_limit,high_limit)),
     "turbidity_ntu" : list(range(low_limit,high_limit)),
-    "nitrate_x_par" : list(range(low_limit,high_limit)),
-    "wind_x_upwelling" : list(range(low_limit,high_limit)),
+    #"nitrate_x_par" : list(range(low_limit,high_limit)),
+    #"wind_x_upwelling" : list(range(low_limit,high_limit)),
     # O Lasso não eliminou algumas destas features mas o R^2 de validação piorou ligeiramente
-    "river_div_turbidity" : list(range(low_limit,high_limit)),
+    #"river_div_turbidity" : list(range(low_limit,high_limit)),
     #"sst_c_x_nitrate" : list(range(low_limit,high_limit))
     #"sst_c": [1, 2, 3],                     # Temperatura de ontem, anteontem e há 3 dias
     #"wind_speed_m_s": [1, 7],               # Vento de ontem e da semana passada (exemplo)
@@ -146,8 +146,12 @@ def main() -> None:
             X_val_fold_scaled = pd.DataFrame(scaler.transform(X_val_fold), columns=X_val_fold.columns)
             
             # Clipping the outliers for both test and validation data
-            X_train_fold_scaled = X_train_fold_scaled.clip(-3, 3)
-            X_val_fold_scaled = X_val_fold_scaled.clip(-3, 3)
+            for col in X_train_fold_scaled.columns:
+                if col.startswith("chlorophyll_a_mg_m3__lag_"):
+                    continue  
+
+                X_train_fold_scaled[col] = X_train_fold_scaled[col].clip(-3, 3)
+                X_val_fold_scaled[col] = X_val_fold_scaled[col].clip(-3, 3)
             
             clf_lasso = linear_model.Lasso(alpha=alpha, max_iter=150000)
             clf_lasso.fit(X_train_fold_scaled, Y_train_fold)
@@ -195,8 +199,16 @@ def main() -> None:
             Y_train_fold, Y_val_fold = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
             
             scaler = StandardScaler()
-            X_train_fold_scaled = pd.DataFrame(scaler.fit_transform(X_train_fold), columns=X_train_fold.columns).clip(-3, 3)
-            X_val_fold_scaled = pd.DataFrame(scaler.transform(X_val_fold), columns=X_val_fold.columns).clip(-3, 3)
+            X_train_fold_scaled = pd.DataFrame(scaler.fit_transform(X_train_fold), columns=X_train_fold.columns)
+            X_val_fold_scaled = pd.DataFrame(scaler.transform(X_val_fold), columns=X_val_fold.columns)
+
+            for col in X_train_fold_scaled.columns:
+                if col.startswith("chlorophyll_a_mg_m3__lag_"):
+                    continue  
+
+                X_train_fold_scaled[col] = X_train_fold_scaled[col].clip(-3, 3)
+                X_val_fold_scaled[col] = X_val_fold_scaled[col].clip(-3, 3)
+                        
             
             clf_ridge = linear_model.Ridge(alpha=alpha)
             clf_ridge.fit(X_train_fold_scaled, Y_train_fold)
