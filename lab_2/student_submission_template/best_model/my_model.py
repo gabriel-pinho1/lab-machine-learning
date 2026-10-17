@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from aux import constant_prediction
+from aux import constant_prediction, one_day_row
 
 
 def load_model(model_path: str | Path) -> Any:
@@ -31,6 +31,21 @@ def predict(model: Any, history_df: pd.DataFrame, day_features_df: pd.DataFrame)
     allowed; library pipelines and output-processing wrappers are not.
     """
 
+    scaler = model["scaler"]
+    kept_features = model["kept_features"]
+    clf_ridge = model["model"]
+
+    X_today = one_day_row(history_df, day_features_df)
     
-    return np.asarray([constant_prediction(model)], dtype=float)
+    X_scaled = pd.DataFrame(scaler.transform(X_today), columns=X_today.columns).clip(-3, 3)
+    
+    X_cut = X_scaled.loc[:, kept_features]
+    
+    pred_log = clf_ridge.predict(X_cut)
+    
+    pred_real = np.expm1(pred_log)
+
+    final_pred = np.nan_to_num(pred_real, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    return np.asarray(final_pred, dtype=float).reshape(1,)
 

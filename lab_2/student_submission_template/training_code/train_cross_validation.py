@@ -10,7 +10,7 @@ transformation and output post-processing must remain explicit.
 """
 
 from __future__ import annotations
-
+import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
@@ -28,9 +28,9 @@ from sklearn.model_selection import TimeSeriesSplit
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", required=False, type=Path)
+    parser.add_argument("--data", required=True, type=Path)
     # Tenho de voltar a meter True no final
-    parser.add_argument("--output", required=False, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
 
     # Guarda os inputs do terminal nesta variável
     args = parser.parse_args()
@@ -285,13 +285,33 @@ def main() -> None:
     print(f"Test MAE: {mae_ridge_lasso_test:.4f} mg/m3")
 
 
+    # Training the model using the obtained parameters on the last year (2023)
 
+    X_total = pd.concat([X_cv, X_test])
+    Y_total = pd.concat([Y_cv, Y_test])
 
+    scaler_final = StandardScaler()
+    X_final_scaled = pd.DataFrame(scaler_final.fit_transform(X_total), columns= X_total.columns).clip(-3, 3)
 
+    lasso_final = linear_model.Lasso(alpha = best_alpha_lasso, max_iter = 150000)
+    lasso_final.fit(X_final_scaled, Y_total)
 
+    coefficients_final = pd.Series(lasso_final.coef_, index = X_final_scaled.columns)
+    kept_features_final = coefficients_final[coefficients_final != 0.0].index.tolist()
 
+    X_final_cut = X_final_scaled.loc[:, kept_features_final]
+    ridge_final = linear_model.Ridge(alpha = best_alpha_ridge_lasso, max_iter = 150000)
+    ridge_final.fit(X_final_cut, Y_total)
 
+    # Saving the final model
+    model_artifact = {
+    "scaler" : scaler_final,
+    "kept_features" : kept_features_final,
+    "model": ridge_final
+    } 
 
+    with open(args.output, "wb") as f:
+        pickle.dump(model_artifact, f)
 
 
 
@@ -333,7 +353,7 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 # Para correr no final
-# python train.py --data ../data/chlorophyll_student_2015_2023.xlsx --output ../best_model/model.pkl
+# python train_cross_validation.py --data ../../data/chlorophyll_student_2015_2023.xlsx --output ../best_model/model.pkl
 
 # Para correr no entranto
 #python train_cross_validation.py --data ../../data/chlorophyll_student_2015_2023.xlsx 
