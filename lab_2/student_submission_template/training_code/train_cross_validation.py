@@ -284,10 +284,10 @@ def main() -> None:
 
 
 
-    vector_length_lasso = 50
+    vector_length_lasso = 100
     vector_length_ridge = 50
-    alpha_lasso_defined = np.logspace(-4, -2, vector_length_lasso)
-    alpha_ridge_defined = np.logspace(-2, 4, vector_length_ridge)
+    alpha_lasso_defined = np.logspace(-4, 0, vector_length_lasso)
+    alpha_ridge_defined = np.logspace(-4, 1, vector_length_ridge)
 
 
     # Starting here the optimization using cross validation
@@ -295,6 +295,7 @@ def main() -> None:
     best_alpha_lasso = None
     alphas_testados = []
     r2_resultados = []
+    r2_erros_padrao = []
     features_retidas = []
 
     for alpha in alpha_lasso_defined:
@@ -332,9 +333,12 @@ def main() -> None:
 
         # Calculates the mean R^2 score for all the time splits for the same alpha
         mean_r2 = np.mean(vector_r2_scores) 
+        se_r2 = np.std(vector_r2_scores) / np.sqrt(len(custom_cv_splits)) # Erro Padrão
+
 
         alphas_testados.append(alpha)
         r2_resultados.append(mean_r2)
+        r2_erros_padrao.append(se_r2)
         num_features = np.sum(np.abs(clf_lasso.coef_))
         features_retidas.append(num_features)
 
@@ -367,24 +371,37 @@ def main() -> None:
 
     # After determining the best alpha for all the time splits, we use it to test on all the past data
 
+    max_r2_idx = np.argmax(r2_resultados)
+    max_r2 = r2_resultados[max_r2_idx]
+    se_at_max_r2 = r2_erros_padrao[max_r2_idx]
+
+    threshold_r2 = max_r2 - se_at_max_r2
+    # Alternativa (Opção B): Podes usar um valor fixo, ex: threshold_r2 = max_r2 - 0.02
+
+    best_parsimonious_alpha = alphas_testados[max_r2_idx]
+    
+    for i in range(len(alphas_testados) - 1, -1, -1):
+        if r2_resultados[i] >= threshold_r2:
+            best_parsimonious_alpha = alphas_testados[i]
+            break 
+
+    print(f"R2 Máximo Absoluto: {max_r2:.4f}")
+    print(f"O melhor Lasso Parcimonioso tem alpha={best_parsimonious_alpha} com R2 médio de {r2_resultados[alphas_testados.index(best_parsimonious_alpha)]:.4f}")
+
+
     scaler_cv = StandardScaler()
     X_cv_scaled = pd.DataFrame(scaler_cv.fit_transform(X_cv), columns=X_cv.columns).clip(-3, 3)
 
-    final_cv_lasso = linear_model.Lasso(alpha = best_alpha_lasso, max_iter = 150000)
+    final_cv_lasso = linear_model.Lasso(alpha = best_parsimonious_alpha, max_iter = 150000)
     final_cv_lasso.fit(X_cv_scaled, Y_cv)
 
     preds_lasso_cv_mg = np.expm1(final_cv_lasso.predict(X_cv_scaled))
     mae_best_lasso = mean_absolute_error(np.expm1(Y_cv), preds_lasso_cv_mg)
     coefficients_lasso = pd.Series(final_cv_lasso.coef_, index=X_cv_scaled.columns)
+
+    kept_features_lasso = coefficients_lasso[coefficients_lasso != 0.0].index.tolist()
     
-    abs_coefs = coefficients_lasso.abs()
-    
-    sorted_coefs = abs_coefs.sort_values(ascending=False)
-    
-    top_25_features = sorted_coefs.head(25)
-    
-    kept_features_lasso = top_25_features.index.tolist()
-    print_kept_lasso = coefficients_lasso.loc[kept_features_lasso]
+    print(f"Número de features retidas pelo Lasso: {len(kept_features_lasso)}")
 
     
     #kept_features_lasso = coefficients_lasso[coefficients_lasso != 0.0].index.tolist()
