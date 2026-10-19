@@ -76,6 +76,7 @@ def main() -> None:
     high_limit = 15
     low_limit = 0
 
+
     defined_lags = {
     "chlorophyll_a_mg_m3": list(range(1, high_limit)),
     "sst_c": list(range(low_limit, high_limit)),
@@ -113,8 +114,8 @@ def main() -> None:
     test_size = 365
 
     # cv refers to cross validation
-    X_cv, X_test = X.iloc[:-test_size].copy(), X.iloc[:-test_size].copy()
-    Y_cv, Y_test = Y.iloc[:-test_size].copy(), Y.iloc[:-test_size].copy()
+    X_cv, X_test = X.iloc[:-test_size].copy(), X.iloc[-test_size:].copy()
+    Y_cv, Y_test = Y.iloc[:-test_size].copy(), Y.iloc[-test_size:].copy()
 
 
     # Assuming that the log already compresses the outliers, so no z_score (for now)
