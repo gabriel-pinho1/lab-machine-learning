@@ -72,7 +72,7 @@ def main() -> None:
     low_limit = 0
 
 
-    '''defined_lags = {
+    defined_lags = {
     "chlorophyll_a_mg_m3": list(range(1, high_limit)),
     "sst_c": list(range(low_limit, high_limit)),
     "par_umol_m2_s" : list(range(low_limit, high_limit)), 
@@ -93,9 +93,9 @@ def main() -> None:
     #"sst_c_x_nitrate" : list(range(low_limit,high_limit))
     #"sst_c": [1, 2, 3],                     # Temperatura de ontem, anteontem e há 3 dias
     #"wind_speed_m_s": [1, 7],               # Vento de ontem e da semana passada (exemplo)
-    }'''
+    }
 
-    defined_lags = {
+    '''defined_lags = {
     "chlorophyll_a_mg_m3": list(range(1, high_limit)),
     "sst_c": list(range(low_limit, high_limit)),
     "par_umol_m2_s" : list(range(low_limit, high_limit)), 
@@ -117,7 +117,7 @@ def main() -> None:
     #"sst_c_x_nitrate" : list(range(low_limit,high_limit))
     #"sst_c": [1, 2, 3],                     # Temperatura de ontem, anteontem e há 3 dias
     #"wind_speed_m_s": [1, 7],               # Vento de ontem e da semana passada (exemplo)
-    }
+    }'''
 
     # Moving average days
     window_size_3 = 3
