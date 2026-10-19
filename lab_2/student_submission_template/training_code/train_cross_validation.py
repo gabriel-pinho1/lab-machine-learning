@@ -147,8 +147,12 @@ def main() -> None:
             X_val_fold_scaled = pd.DataFrame(scaler.transform(X_val_fold), columns=X_val_fold.columns)
             
             # Clipping the outliers for both test and validation data
-            X_train_fold_scaled = X_train_fold_scaled.clip(-3, 3)
-            X_val_fold_scaled = X_val_fold_scaled.clip(-3, 3)
+            for col in X_train_fold_scaled.columns:
+                if col.startswith("chlorophyll_a_mg_m3__lag_"):
+                    continue  
+
+                X_train_fold_scaled[col] = X_train_fold_scaled[col].clip(-3, 3)
+                X_val_fold_scaled[col] = X_val_fold_scaled[col].clip(-3, 3)
             
             clf_lasso = linear_model.Lasso(alpha=alpha, max_iter=150000)
             clf_lasso.fit(X_train_fold_scaled, Y_train_fold)
@@ -196,8 +200,16 @@ def main() -> None:
             Y_train_fold, Y_val_fold = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
             
             scaler = StandardScaler()
-            X_train_fold_scaled = pd.DataFrame(scaler.fit_transform(X_train_fold), columns=X_train_fold.columns).clip(-3, 3)
-            X_val_fold_scaled = pd.DataFrame(scaler.transform(X_val_fold), columns=X_val_fold.columns).clip(-3, 3)
+            X_train_fold_scaled = pd.DataFrame(scaler.fit_transform(X_train_fold), columns=X_train_fold.columns)
+            X_val_fold_scaled = pd.DataFrame(scaler.transform(X_val_fold), columns=X_val_fold.columns)
+
+            for col in X_train_fold_scaled.columns:
+                if col.startswith("chlorophyll_a_mg_m3__lag_"):
+                    continue  
+
+                X_train_fold_scaled[col] = X_train_fold_scaled[col].clip(-3, 3)
+                X_val_fold_scaled[col] = X_val_fold_scaled[col].clip(-3, 3)
+                        
             
             clf_ridge = linear_model.Ridge(alpha=alpha)
             clf_ridge.fit(X_train_fold_scaled, Y_train_fold)
@@ -285,7 +297,40 @@ def main() -> None:
     print(f"Test R^2: {r2_ridge_lasso_test:.4f}")
     print(f"Test MAE: {mae_ridge_lasso_test:.4f} mg/m3")
 
+    # ------------------ Plotting Test Predictions vs Real ------------------
+    Y_test_real = np.expm1(Y_test)
+    
+    plt.figure(figsize=(14, 6))
+    
+    # Subplot 1: Timeline comparison
+    plt.subplot(1, 2, 1)
+    plt.plot(Y_test_real.values, label='Real Values', color='tab:blue', alpha=0.7)
+    plt.plot(predicts_ridge_lasso_test, label='Predictions (Ridge-Lasso)', color='tab:orange', alpha=0.7)
+    plt.title("Test Set: Real vs Predicted (Timeline)")
+    plt.xlabel("Days in Test Set")
+    plt.ylabel("Chlorophyll a (mg/m3)")
+    plt.legend()
+    
+    # Subplot 2: Scatter correlation
+    plt.subplot(1, 2, 2)
+    plt.scatter(Y_test_real.values, predicts_ridge_lasso_test, alpha=0.5, color='tab:green', s=15)
+    
+    # Add y=x ideal fit reference line
+    max_val = max(Y_test_real.max(), predicts_ridge_lasso_test.max())
+    min_val = min(Y_test_real.min(), predicts_ridge_lasso_test.min())
+    plt.plot([min_val, max_val], [min_val, max_val], 'r--', label='Ideal Fit (y=x)')
+    
+    plt.title(f"Test Set Correlation (R² = {r2_ridge_lasso_test:.2f})")
+    plt.xlabel("Real Chlorophyll a (mg/m3)")
+    plt.ylabel("Predicted Chlorophyll a (mg/m3)")
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig("test_predictions_vs_real.png", dpi=300, bbox_inches='tight')
+    plt.show()
+    # -----------------------------------------------------------------------
 
+    # Training the model using the obtained parameters on the last year (2023)
     # Training the model using the obtained parameters on the last year (2023)
 
     X_total = pd.concat([X_cv, X_test])
