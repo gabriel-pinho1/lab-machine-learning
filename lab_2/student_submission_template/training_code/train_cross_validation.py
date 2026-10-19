@@ -403,6 +403,85 @@ def main() -> None:
     
     print(f"Número de features retidas pelo Lasso: {len(kept_features_lasso)}")
 
+
+
+    print("\n" + "="*50)
+    print("DIAGNÓSTICO DE VARIÂNCIA E SUFICIÊNCIA DO MODELO")
+    print("="*50)
+
+    # 1. Obter as métricas por FOLD para o modelo Parcimonioso (8 features)
+    parsimonious_lasso = linear_model.Lasso(alpha=best_parsimonious_alpha, max_iter=150000)
+    
+    print(f"\nA testar o modelo Parcimonioso (Alpha={best_parsimonious_alpha:.4f}) ano a ano:")
+    
+    r2_por_ano = []
+    mae_por_ano = []
+    
+    # Vamos re-iterar pelos folds para ver os resultados individuais
+    for idx, (train_index, val_index) in enumerate(custom_cv_splits):
+        ano_validacao = validation_years[idx]
+        
+        X_t, X_v = X_cv.iloc[train_index].copy(), X_cv.iloc[val_index].copy()
+        Y_t, Y_v = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
+
+        # Scaler
+        scaler_diag = StandardScaler()
+        X_t_scaled = pd.DataFrame(scaler_diag.fit_transform(X_t), columns=X_t.columns).clip(-3, 3)
+        X_v_scaled = pd.DataFrame(scaler_diag.transform(X_v), columns=X_v.columns).clip(-3, 3)
+        
+        # Fit e Predict
+        parsimonious_lasso.fit(X_t_scaled, Y_t)
+        preds_mg = np.expm1(parsimonious_lasso.predict(X_v_scaled))
+        Y_v_mg = np.expm1(Y_v)
+        
+        # Métricas
+        fold_r2 = r2_score(Y_v_mg, preds_mg)
+        fold_mae = mean_absolute_error(Y_v_mg, preds_mg)
+        
+        r2_por_ano.append(fold_r2)
+        mae_por_ano.append(fold_mae)
+        
+        print(f" -> Ano {ano_validacao}: R2 = {fold_r2:.3f} | MAE = {fold_mae:.3f} mg/m3")
+
+    # 2. Avaliar a Variância
+    print("\n--- Análise de Variância ---")
+    print(f"Desvio Padrão do R2 entre anos: {np.std(r2_por_ano):.3f}")
+    print(f"Diferença entre o melhor e pior ano (R2): {max(r2_por_ano) - min(r2_por_ano):.3f}")
+    if np.std(r2_por_ano) > 0.15:
+        print("AVISO: A variância é alta. O modelo tem um desempenho muito instável dependendo do ano.")
+    else:
+        print("BOM: A variância é aceitável. O modelo porta-se de forma estável ao longo do tempo.")
+
+    # 3. Teste de Suficiência (Comparação com o Modelo Máximo)
+    print("\n--- Análise de Suficiência (Trade-off Complexidade vs R2) ---")
+    
+    # Descobrir quantas features o R2 máximo usava e qual o seu valor exato
+    max_lasso = linear_model.Lasso(alpha=best_alpha_lasso, max_iter=150000)
+    # Fit no conjunto todo de CV para contar features
+    X_cv_scaled_diag = pd.DataFrame(StandardScaler().fit_transform(X_cv), columns=X_cv.columns).clip(-3, 3)
+    
+    max_lasso.fit(X_cv_scaled_diag, Y_cv)
+    features_modelo_complexo = np.sum(max_lasso.coef_ != 0)
+    
+    parsimonious_lasso.fit(X_cv_scaled_diag, Y_cv)
+    features_modelo_simples = np.sum(parsimonious_lasso.coef_ != 0)
+    features_nomes = X_cv.columns[parsimonious_lasso.coef_ != 0].tolist()
+    
+    r2_simples = np.mean(r2_por_ano)
+    r2_complexo = max_r2 # A variável que guardaste na resposta anterior
+    
+    print(f"Modelo Complexo (Max R2) : {features_modelo_complexo} features -> R2 = {r2_complexo:.4f}")
+    print(f"Modelo Parcimonioso      : {features_modelo_simples} features -> R2 = {r2_simples:.4f}")
+    print(f"Custo da Simplificação   : Perdeste {r2_complexo - r2_simples:.4f} de R2 ao remover {(features_modelo_complexo - features_modelo_simples)} features.")
+    
+    print("\nAs 8 features que o modelo considerou suficientes:")
+    for feat in features_nomes:
+        print(f" - {feat}")
+    print("="*50 + "\n")
+
+
+
+
     
     #kept_features_lasso = coefficients_lasso[coefficients_lasso != 0.0].index.tolist()
     # Training ridge on the parameters that lasso did not eliminate
