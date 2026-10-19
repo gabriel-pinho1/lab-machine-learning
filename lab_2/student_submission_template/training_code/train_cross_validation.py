@@ -313,7 +313,7 @@ def main() -> None:
             
             # Clipping the outliers for both test and validation data
             for col in X_train_fold_scaled.columns:
-                if col.startswith("chlorophyll_a_mg_m3__lag_"):
+                if col.startswith("chlorophyll_a_mg_m3__lag_") or col.startswith("annual_sin") or col.startswith("annual_cos"):
                     continue  
 
                 X_train_fold_scaled[col] = X_train_fold_scaled[col].clip(-3, 3)
