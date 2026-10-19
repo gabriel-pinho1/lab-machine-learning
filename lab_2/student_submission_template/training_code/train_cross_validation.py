@@ -76,6 +76,7 @@ def main() -> None:
     high_limit = 15
     low_limit = 0
 
+
     defined_lags = {
     "chlorophyll_a_mg_m3": list(range(1, high_limit)),
     "sst_c": list(range(low_limit, high_limit)),
@@ -117,9 +118,24 @@ def main() -> None:
     Y_cv, Y_test = Y.iloc[:-test_size].copy(), Y.iloc[-test_size:].copy()
 
 
-    # Assuming that the log already compresses the outliers, so no z_score (for now)
+    cv_dates = df_lagged["date"].iloc[:-test_size]
+    cv_years = cv_dates.dt.year.values
 
-    tscv = TimeSeriesSplit(n_splits = 4) # Creats 4 different temproal windows for the cross validation
+
+    # Creating the split for cross validation
+    # At least 4 years of training data for the first plit
+    # After that, one year is added each time
+    validation_years = [2019, 2020, 2021, 2022]
+    
+    custom_cv_splits = []
+    for val_year in validation_years:
+        train_idx = np.where(cv_years < val_year)[0]
+
+        val_idx = np.where(cv_years == val_year)[0]
+        custom_cv_splits.append((train_idx, val_idx))
+
+
+
 
     vector_length_lasso = 50
     vector_length_ridge = 50
@@ -134,7 +150,7 @@ def main() -> None:
     for alpha in alpha_lasso_defined:
         vector_r2_scores = []
 
-        for train_index, val_index in tscv.split(X_cv):
+        for train_index, val_index in custom_cv_splits:
             X_train_fold, X_val_fold = X_cv.iloc[train_index].copy(), X_cv.iloc[val_index].copy()
             
             Y_train_fold, Y_val_fold = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
@@ -194,7 +210,7 @@ def main() -> None:
     for alpha in alpha_ridge_defined:
         fold_r2_scores = []
         
-        for train_index, val_index in tscv.split(X_cv_cut):
+        for train_index, val_index in custom_cv_splits:
             X_train_fold, X_val_fold = X_cv_cut.iloc[train_index].copy(), X_cv_cut.iloc[val_index].copy()
             Y_train_fold, Y_val_fold = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
             
