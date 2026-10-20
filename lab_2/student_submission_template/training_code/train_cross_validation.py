@@ -155,7 +155,7 @@ def main() -> None:
     }'''
 
     df_lagged = build_lagged_frame(df_raw, lag_spec=defined_lags)
-   # df_lagged = semi_anual_sinusoidals(df_lagged)
+    #df_lagged = semi_anual_sinusoidals(df_lagged)
 
     Y = df_lagged["chlorophyll_a_mg_m3"]
     X = df_lagged.drop(columns = ["date", "chlorophyll_a_mg_m3"])
@@ -347,7 +347,7 @@ def main() -> None:
             best_r2_lasso = mean_r2
             best_alpha_lasso = alpha
 
-    print(f"O melhor Lasso (CV) tem alpha={best_alpha_lasso} com R2 médio de {best_r2_lasso:.4f}")
+    
 
     plt.close('all')
     fig, ax1 = plt.subplots(figsize=(10, 6))
@@ -413,7 +413,7 @@ def main() -> None:
     # 1. Obter as métricas por FOLD para o modelo Parcimonioso 
     parsimonious_lasso = linear_model.Lasso(alpha=best_parsimonious_alpha, max_iter=150000)
     
-    print(f"\nA testar o modelo Parcimonioso (Alpha={best_parsimonious_alpha:.4f}) ano a ano:")
+    print(f"\nTestin Parcimounious model (Alpha={best_parsimonious_alpha:.4f}) year by year:")
     
     r2_por_ano = []
     mae_por_ano = []
@@ -442,19 +442,18 @@ def main() -> None:
         r2_por_ano.append(fold_r2)
         mae_por_ano.append(fold_mae)
         
-        print(f" -> Ano {ano_validacao}: R2 = {fold_r2:.3f} | MAE = {fold_mae:.3f} mg/m3")
+        print(f" -> Year {ano_validacao}: R2 = {fold_r2:.3f} | MAE = {fold_mae:.3f} mg/m3")
 
     # 2. Avaliar a Variância
-    print("\n--- Análise de Variância ---")
-    print(f"Desvio Padrão do R2 entre anos: {np.std(r2_por_ano):.3f}")
-    print(f"Diferença entre o melhor e pior ano (R2): {max(r2_por_ano) - min(r2_por_ano):.3f}")
-    if np.std(r2_por_ano) > 0.15:
-        print("AVISO: A variância é alta. O modelo tem um desempenho muito instável dependendo do ano.")
-    else:
-        print("BOM: A variância é aceitável. O modelo porta-se de forma estável ao longo do tempo.")
+    print("\n--- Variance analysis ---")
+    print(f"Standart deeviation of R2: {np.std(r2_por_ano):.3f}")
+    print(f"Max difference betwwen years (R2): {max(r2_por_ano) - min(r2_por_ano):.3f}")
+    '''if np.std(r2_por_ano) > 0.15:
+        print("warning: the variance is high, model performance varies higly.")'''
+    
 
     # 3. Teste de Suficiência (Comparação com o Modelo Máximo)
-    print("\n--- Análise de Suficiência (Trade-off Complexidade vs R2) ---")
+    print("\n--- Suficiency Analysis (Trade-off Complexidade vs R2) ---")
     
     # Descobrir quantas features o R2 máximo usava e qual o seu valor exato
     max_lasso = linear_model.Lasso(alpha=best_alpha_lasso, max_iter=150000)
@@ -562,14 +561,11 @@ def main() -> None:
 
 
 
-    print(f"validation results: \n")
+    print(f"validation results of Ridge Model run on features kept by Lasso: \n")
 
 
     
-    print(f'\n----lasso-----\n')
-    print(f'alpha_best={best_alpha_lasso}')
-    print(f"Validation R^2_best: {best_r2_lasso:.4f}")
-    print(f"Validation MAE best: {mae_best_lasso:.4f} mg/m3")
+
 
     
 
@@ -580,7 +576,7 @@ def main() -> None:
     print(f"Validation R^2_best: {best_r2_ridge_lasso:.4f}")
     print(f"Validation MAE best: {mae_best_ridge_lasso:.4f} mg/m3")
     print("\n--- Ridge final weighs ---")
-    print(sorted_importance.head(20))
+    print(sorted_importance)
 
     print("\n")
     print(f"test results: \n")
