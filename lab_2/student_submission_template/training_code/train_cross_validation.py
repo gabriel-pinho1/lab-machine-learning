@@ -19,7 +19,7 @@ import gc
 import pandas as pd
 from scipy.stats import zscore
 
-from build_lagged_features import read_table, build_lagged_frame
+from build_lagged_features import read_table, build_lagged_frame, semi_anual_sinusoidals
 
 from sklearn.preprocessing import StandardScaler
 from sklearn import linear_model
@@ -155,12 +155,12 @@ def main() -> None:
     }'''
 
     df_lagged = build_lagged_frame(df_raw, lag_spec=defined_lags)
-
+   # df_lagged = semi_anual_sinusoidals(df_lagged)
 
     Y = df_lagged["chlorophyll_a_mg_m3"]
     X = df_lagged.drop(columns = ["date", "chlorophyll_a_mg_m3"])
 
-
+    
 
     # Last year of all is the final test
     test_size = 365
@@ -386,8 +386,8 @@ def main() -> None:
             best_parsimonious_alpha = alphas_testados[i]
             break 
 
-    print(f"R2 Máximo Absoluto: {max_r2:.4f}")
-    print(f"O melhor Lasso Parcimonioso tem alpha={best_parsimonious_alpha} com R2 médio de {r2_resultados[alphas_testados.index(best_parsimonious_alpha)]:.4f}")
+    print(f"R2 Max: {max_r2:.4f}")
+    print(f"The best parcimounious model has alpha={best_parsimonious_alpha} with an average R2 of {r2_resultados[alphas_testados.index(best_parsimonious_alpha)]:.4f}")
 
 
     scaler_cv = StandardScaler()
@@ -402,15 +402,15 @@ def main() -> None:
 
     kept_features_lasso = coefficients_lasso[coefficients_lasso != 0.0].index.tolist()
     
-    print(f"Número de features retidas pelo Lasso: {len(kept_features_lasso)}")
+    print(f"Number of features kept by Lasso: {len(kept_features_lasso)}")
 
 
 
     print("\n" + "="*50)
-    print("DIAGNÓSTICO DE VARIÂNCIA E SUFICIÊNCIA DO MODELO")
+    print("Variance and Suficiency Analysis of the Model")
     print("="*50)
 
-    # 1. Obter as métricas por FOLD para o modelo Parcimonioso (8 features)
+    # 1. Obter as métricas por FOLD para o modelo Parcimonioso 
     parsimonious_lasso = linear_model.Lasso(alpha=best_parsimonious_alpha, max_iter=150000)
     
     print(f"\nA testar o modelo Parcimonioso (Alpha={best_parsimonious_alpha:.4f}) ano a ano:")
@@ -418,7 +418,7 @@ def main() -> None:
     r2_por_ano = []
     mae_por_ano = []
     
-    # Vamos re-iterar pelos folds para ver os resultados individuais
+    # re-iterar pelos folds para ver os resultados individuais
     for idx, (train_index, val_index) in enumerate(custom_cv_splits):
         ano_validacao = validation_years[idx]
         
@@ -471,11 +471,11 @@ def main() -> None:
     r2_simples = np.mean(r2_por_ano)
     r2_complexo = max_r2 # A variável que guardaste na resposta anterior
     
-    print(f"Modelo Complexo (Max R2) : {features_modelo_complexo} features -> R2 = {r2_complexo:.4f}")
-    print(f"Modelo Parcimonioso      : {features_modelo_simples} features -> R2 = {r2_simples:.4f}")
-    print(f"Custo da Simplificação   : Perdeste {r2_complexo - r2_simples:.4f} de R2 ao remover {(features_modelo_complexo - features_modelo_simples)} features.")
+    print(f" (Max R2) : {features_modelo_complexo} features -> R2 = {r2_complexo:.4f}")
+    print(f" Parcimonious Model    : {features_modelo_simples} features -> R2 = {r2_simples:.4f}")
+    print(f"Simplification Cost   : Lost {r2_complexo - r2_simples:.4f}  R2 and removed {(features_modelo_complexo - features_modelo_simples)} features.")
     
-    print("\nAs 8 features que o modelo considerou suficientes:")
+    print("\n Kept features after Lasso:")
     for feat in features_nomes:
         print(f" - {feat}")
     print("="*50 + "\n")
@@ -484,7 +484,7 @@ def main() -> None:
 
 
     
-    #kept_features_lasso = coefficients_lasso[coefficients_lasso != 0.0].index.tolist()
+    
     # Training ridge on the parameters that lasso did not eliminate
     X_cv_cut = X_cv.loc[:, kept_features_lasso]
     
@@ -564,17 +564,14 @@ def main() -> None:
 
     print(f"validation results: \n")
 
-    print_zeroed_lasso = coefficients_lasso[coefficients_lasso == 0.0]
-    print_kept_lasso = coefficients_lasso[coefficients_lasso != 0.0]
+
     
     print(f'\n----lasso-----\n')
     print(f'alpha_best={best_alpha_lasso}')
     print(f"Validation R^2_best: {best_r2_lasso:.4f}")
     print(f"Validation MAE best: {mae_best_lasso:.4f} mg/m3")
-    print("--- Features Driven to Zero ---")
-    print(print_zeroed_lasso)
-    print("\n--- Features Kept in the Model after the 0.001 cut ---")
-    #print(print_kept_lasso)
+
+    
 
     importance_ridge_lasso = coefficients_ridge_lasso.abs()
     sorted_importance = importance_ridge_lasso.sort_values(ascending=False)
@@ -582,7 +579,7 @@ def main() -> None:
     print(f'alpha_best={best_alpha_ridge_lasso}')
     print(f"Validation R^2_best: {best_r2_ridge_lasso:.4f}")
     print(f"Validation MAE best: {mae_best_ridge_lasso:.4f} mg/m3")
-    print("\n--- Top 20 Most Important Features ---")
+    print("\n--- Ridge final weighs ---")
     print(sorted_importance.head(20))
 
     print("\n")
