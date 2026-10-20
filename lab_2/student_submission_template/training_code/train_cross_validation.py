@@ -57,7 +57,7 @@ def main() -> None:
     df_raw["nitrate_x_par"] = df_raw["nitrate_umol_l"] * df_raw["par_umol_m2_s"]
     df_raw["wind_x_upwelling"] = df_raw["wind_speed_m_s"] * df_raw["upwelling_index"]
     df_raw["river_div_turbidity"] = df_raw["river_discharge_index"] / (df_raw["turbidity_ntu"] + 1)
-    #df_raw["sst_c_x_nitrate"] = df_raw["sst_c"] * df_raw["nitrate_umol_l"]
+    df_raw["sst_c_x_nitrate"] = df_raw["sst_c"] * df_raw["nitrate_umol_l"]
 
     # Listing only the columns to which a Moving Average will be aplied since they have a lot of daily noise
     #exogenous_cols_mv = [col for col in df_raw.columns if col in ["wind_speed_m_s", "upwelling_index", "current_speed_m_s", "cloud_fraction", "turbidity_ntu"]]
@@ -90,7 +90,7 @@ def main() -> None:
     "wind_x_upwelling" : list(range(low_limit, high_limit)),
     # O Lasso não eliminou algumas destas features mas o R^2 de validação piorou ligeiramente
     "river_div_turbidity" : [2, 5, 9, 12],
-    #"sst_c_x_nitrate" : list(range(low_limit,high_limit))
+    "sst_c_x_nitrate" : list(range(low_limit,high_limit))
     #"sst_c": [1, 2, 3],                     # Temperatura de ontem, anteontem e há 3 dias
     #"wind_speed_m_s": [1, 7],               # Vento de ontem e da semana passada (exemplo)
     }
