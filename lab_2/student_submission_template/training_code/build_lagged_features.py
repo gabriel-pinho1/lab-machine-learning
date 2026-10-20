@@ -56,7 +56,8 @@ def build_lagged_frame(raw: pd.DataFrame, lag_spec: dict[str, list[int]] | None 
     day = pd.to_datetime(frame[DATE]).dt.dayofyear.to_numpy()
     columns["annual_sin"] = np.sin(2 * np.pi * day / 365.25)
     columns["annual_cos"] = np.cos(2 * np.pi * day / 365.25)
-    
+    #columns["semi_annual_sin"] = np.sin(4 * np.pi * day / 365.25)
+    #columns["semi_annual_cos"] = np.cos(4 * np.pi * day / 365.25)
     out = pd.DataFrame(columns)
     if require_target:
         out = out.dropna(subset=[TARGET])
@@ -73,6 +74,7 @@ def semi_anual_sinusoidals (raw: pd.DataFrame) -> pd.DataFrame:
     frame["semi_annual_sin"] = np.sin(4 * np.pi * day / 365.25)
     frame["semi_annual_cos"] = np.cos(4 * np.pi * day / 365.25)
     return frame
+
 
 def one_day_row(history: pd.DataFrame, day_features: pd.DataFrame,
                 lag_spec: dict[str, list[int]] | None = None) -> pd.DataFrame:
