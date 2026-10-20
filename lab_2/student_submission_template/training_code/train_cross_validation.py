@@ -19,7 +19,7 @@ import gc
 import pandas as pd
 from scipy.stats import zscore
 
-from build_lagged_features import read_table, build_lagged_frame
+from build_lagged_features import read_table, build_lagged_frame, semi_anual_sinusoidals
 
 from sklearn.preprocessing import StandardScaler
 from sklearn import linear_model
@@ -57,7 +57,7 @@ def main() -> None:
     df_raw["nitrate_x_par"] = df_raw["nitrate_umol_l"] * df_raw["par_umol_m2_s"]
     df_raw["wind_x_upwelling"] = df_raw["wind_speed_m_s"] * df_raw["upwelling_index"]
     df_raw["river_div_turbidity"] = df_raw["river_discharge_index"] / (df_raw["turbidity_ntu"] + 1)
-    #df_raw["sst_c_x_nitrate"] = df_raw["sst_c"] * df_raw["nitrate_umol_l"]
+    df_raw["sst_c_x_nitrate"] = df_raw["sst_c"] * df_raw["nitrate_umol_l"]
 
     # Listing only the columns to which a Moving Average will be aplied since they have a lot of daily noise
     #exogenous_cols_mv = [col for col in df_raw.columns if col in ["wind_speed_m_s", "upwelling_index", "current_speed_m_s", "cloud_fraction", "turbidity_ntu"]]
@@ -90,7 +90,7 @@ def main() -> None:
     "wind_x_upwelling" : list(range(low_limit, high_limit)),
     # O Lasso não eliminou algumas destas features mas o R^2 de validação piorou ligeiramente
     "river_div_turbidity" : [2, 5, 9, 12],
-    #"sst_c_x_nitrate" : list(range(low_limit,high_limit))
+    "sst_c_x_nitrate" : list(range(low_limit,high_limit))
     #"sst_c": [1, 2, 3],                     # Temperatura de ontem, anteontem e há 3 dias
     #"wind_speed_m_s": [1, 7],               # Vento de ontem e da semana passada (exemplo)
     }
@@ -155,12 +155,12 @@ def main() -> None:
     }'''
 
     df_lagged = build_lagged_frame(df_raw, lag_spec=defined_lags)
-
+    #df_lagged = semi_anual_sinusoidals(df_lagged)
 
     Y = df_lagged["chlorophyll_a_mg_m3"]
     X = df_lagged.drop(columns = ["date", "chlorophyll_a_mg_m3"])
 
-
+    
 
     # Last year of all is the final test
     test_size = 365
@@ -347,7 +347,7 @@ def main() -> None:
             best_r2_lasso = mean_r2
             best_alpha_lasso = alpha
 
-    print(f"O melhor Lasso (CV) tem alpha={best_alpha_lasso} com R2 médio de {best_r2_lasso:.4f}")
+    
 
     plt.close('all')
     fig, ax1 = plt.subplots(figsize=(10, 6))
@@ -386,8 +386,8 @@ def main() -> None:
             best_parsimonious_alpha = alphas_testados[i]
             break 
 
-    print(f"R2 Máximo Absoluto: {max_r2:.4f}")
-    print(f"O melhor Lasso Parcimonioso tem alpha={best_parsimonious_alpha} com R2 médio de {r2_resultados[alphas_testados.index(best_parsimonious_alpha)]:.4f}")
+    print(f"R2 Max: {max_r2:.4f}")
+    print(f"The best parcimounious model has alpha={best_parsimonious_alpha} with an average R2 of {r2_resultados[alphas_testados.index(best_parsimonious_alpha)]:.4f}")
 
 
     scaler_cv = StandardScaler()
@@ -402,23 +402,23 @@ def main() -> None:
 
     kept_features_lasso = coefficients_lasso[coefficients_lasso != 0.0].index.tolist()
     
-    print(f"Número de features retidas pelo Lasso: {len(kept_features_lasso)}")
+    print(f"Number of features kept by Lasso: {len(kept_features_lasso)}")
 
 
 
     print("\n" + "="*50)
-    print("DIAGNÓSTICO DE VARIÂNCIA E SUFICIÊNCIA DO MODELO")
+    print("Variance and Suficiency Analysis of the Model")
     print("="*50)
 
-    # 1. Obter as métricas por FOLD para o modelo Parcimonioso (8 features)
+    # 1. Obter as métricas por FOLD para o modelo Parcimonioso 
     parsimonious_lasso = linear_model.Lasso(alpha=best_parsimonious_alpha, max_iter=150000)
     
-    print(f"\nA testar o modelo Parcimonioso (Alpha={best_parsimonious_alpha:.4f}) ano a ano:")
+    print(f"\nTestin Parcimounious model (Alpha={best_parsimonious_alpha:.4f}) year by year:")
     
     r2_por_ano = []
     mae_por_ano = []
     
-    # Vamos re-iterar pelos folds para ver os resultados individuais
+    # re-iterar pelos folds para ver os resultados individuais
     for idx, (train_index, val_index) in enumerate(custom_cv_splits):
         ano_validacao = validation_years[idx]
         
@@ -442,19 +442,18 @@ def main() -> None:
         r2_por_ano.append(fold_r2)
         mae_por_ano.append(fold_mae)
         
-        print(f" -> Ano {ano_validacao}: R2 = {fold_r2:.3f} | MAE = {fold_mae:.3f} mg/m3")
+        print(f" -> Year {ano_validacao}: R2 = {fold_r2:.3f} | MAE = {fold_mae:.3f} mg/m3")
 
     # 2. Avaliar a Variância
-    print("\n--- Análise de Variância ---")
-    print(f"Desvio Padrão do R2 entre anos: {np.std(r2_por_ano):.3f}")
-    print(f"Diferença entre o melhor e pior ano (R2): {max(r2_por_ano) - min(r2_por_ano):.3f}")
-    if np.std(r2_por_ano) > 0.15:
-        print("AVISO: A variância é alta. O modelo tem um desempenho muito instável dependendo do ano.")
-    else:
-        print("BOM: A variância é aceitável. O modelo porta-se de forma estável ao longo do tempo.")
+    print("\n--- Variance analysis ---")
+    print(f"Standart deeviation of R2: {np.std(r2_por_ano):.3f}")
+    print(f"Max difference betwwen years (R2): {max(r2_por_ano) - min(r2_por_ano):.3f}")
+    '''if np.std(r2_por_ano) > 0.15:
+        print("warning: the variance is high, model performance varies higly.")'''
+    
 
     # 3. Teste de Suficiência (Comparação com o Modelo Máximo)
-    print("\n--- Análise de Suficiência (Trade-off Complexidade vs R2) ---")
+    print("\n--- Suficiency Analysis (Trade-off Complexidade vs R2) ---")
     
     # Descobrir quantas features o R2 máximo usava e qual o seu valor exato
     max_lasso = linear_model.Lasso(alpha=best_alpha_lasso, max_iter=150000)
@@ -471,11 +470,11 @@ def main() -> None:
     r2_simples = np.mean(r2_por_ano)
     r2_complexo = max_r2 # A variável que guardaste na resposta anterior
     
-    print(f"Modelo Complexo (Max R2) : {features_modelo_complexo} features -> R2 = {r2_complexo:.4f}")
-    print(f"Modelo Parcimonioso      : {features_modelo_simples} features -> R2 = {r2_simples:.4f}")
-    print(f"Custo da Simplificação   : Perdeste {r2_complexo - r2_simples:.4f} de R2 ao remover {(features_modelo_complexo - features_modelo_simples)} features.")
+    print(f" (Max R2) : {features_modelo_complexo} features -> R2 = {r2_complexo:.4f}")
+    print(f" Parcimonious Model    : {features_modelo_simples} features -> R2 = {r2_simples:.4f}")
+    print(f"Simplification Cost   : Lost {r2_complexo - r2_simples:.4f}  R2 and removed {(features_modelo_complexo - features_modelo_simples)} features.")
     
-    print("\nAs 8 features que o modelo considerou suficientes:")
+    print("\n Kept features after Lasso:")
     for feat in features_nomes:
         print(f" - {feat}")
     print("="*50 + "\n")
@@ -484,7 +483,7 @@ def main() -> None:
 
 
     
-    #kept_features_lasso = coefficients_lasso[coefficients_lasso != 0.0].index.tolist()
+    
     # Training ridge on the parameters that lasso did not eliminate
     X_cv_cut = X_cv.loc[:, kept_features_lasso]
     
@@ -562,19 +561,13 @@ def main() -> None:
 
 
 
-    print(f"validation results: \n")
+    print(f"validation results of Ridge Model run on features kept by Lasso: \n")
 
-    print_zeroed_lasso = coefficients_lasso[coefficients_lasso == 0.0]
-    print_kept_lasso = coefficients_lasso[coefficients_lasso != 0.0]
+
     
-    print(f'\n----lasso-----\n')
-    print(f'alpha_best={best_alpha_lasso}')
-    print(f"Validation R^2_best: {best_r2_lasso:.4f}")
-    print(f"Validation MAE best: {mae_best_lasso:.4f} mg/m3")
-    print("--- Features Driven to Zero ---")
-    print(print_zeroed_lasso)
-    print("\n--- Features Kept in the Model after the 0.001 cut ---")
-    #print(print_kept_lasso)
+
+
+    
 
     importance_ridge_lasso = coefficients_ridge_lasso.abs()
     sorted_importance = importance_ridge_lasso.sort_values(ascending=False)
@@ -582,8 +575,8 @@ def main() -> None:
     print(f'alpha_best={best_alpha_ridge_lasso}')
     print(f"Validation R^2_best: {best_r2_ridge_lasso:.4f}")
     print(f"Validation MAE best: {mae_best_ridge_lasso:.4f} mg/m3")
-    print("\n--- Top 20 Most Important Features ---")
-    print(sorted_importance.head(20))
+    print("\n--- Ridge final weighs ---")
+    print(sorted_importance)
 
     print("\n")
     print(f"test results: \n")
