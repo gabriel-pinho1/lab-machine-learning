@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from aux import constant_prediction, one_day_row
+from aux import one_day_row
 
 
 def load_model(model_path: str | Path) -> Any:

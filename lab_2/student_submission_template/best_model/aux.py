@@ -12,7 +12,7 @@ TARGET = "chlorophyll_a_mg_m3"
 def build_lagged_frame(raw: pd.DataFrame, lag_spec: dict[str, list[int]] | None = None,
                        require_target: bool = True) -> pd.DataFrame:
     """Return rows indexed by prediction date, never using target lag 0."""
-    lag_spec = lag_spec or DEFAULT_LAGS
+    lag_spec = lag_spec or defined_lags
     if DATE not in raw:
         raise ValueError(f"missing required column: {DATE}")
     if require_target and TARGET not in raw:
@@ -38,31 +38,35 @@ def build_lagged_frame(raw: pd.DataFrame, lag_spec: dict[str, list[int]] | None 
     return out.iloc[max_lag:].reset_index(drop=True)
 
 
+def semi_anual_sinusoidals (raw: pd.DataFrame) -> pd.DataFrame:
+    if DATE not in raw:
+            raise ValueError(f"missing required column: {DATE}")
+   
+    frame = raw.copy().sort_values(DATE).reset_index(drop=True)
+    frame[DATE] = pd.to_datetime(frame[DATE])
+    day = frame[DATE].dt.dayofyear.to_numpy()
+    frame["semi_annual_sin"] = np.sin(4 * np.pi * day / 365.25)
+    frame["semi_annual_cos"] = np.cos(4 * np.pi * day / 365.25)
+    return frame
+
 high_limit = 15
 low_limit = 0
 
 defined_lags = {
     "chlorophyll_a_mg_m3": list(range(1, high_limit)),
     "sst_c": list(range(low_limit, high_limit)),
-    "par_umol_m2_s" : list(range(low_limit,high_limit)), 
-    "nitrate_umol_l" : list(range(low_limit,high_limit)),
-    "wind_speed_m_s" : list(range(low_limit,high_limit)),
-    "upwelling_index" : list(range(low_limit,high_limit)),
-    "mixed_layer_depth_m" : list(range(low_limit,high_limit)),
-    "salinity_psu" : list(range(low_limit,high_limit)),
-    "current_speed_m_s" : list(range(low_limit,high_limit)),
-    "river_discharge_index" : list(range(low_limit,high_limit)),
-    "cloud_fraction" : list(range(low_limit,high_limit)),
-    "surface_pressure_hpa" : list(range(low_limit,high_limit)),
-    "turbidity_ntu" : list(range(low_limit,high_limit)),
-    "nitrate_x_par" : list(range(low_limit,high_limit)),
-    "wind_x_upwelling" : list(range(low_limit,high_limit)),
-    # O Lasso não eliminou algumas destas features mas o R^2 de validação piorou ligeiramente
-    "river_div_turbidity" : list(range(low_limit,high_limit)),
-    #"sst_c_x_nitrate" : list(range(low_limit,high_limit))
-    #"sst_c": [1, 2, 3],                     # Temperatura de ontem, anteontem e há 3 dias
-    #"wind_speed_m_s": [1, 7],               # Vento de ontem e da semana passada (exemplo)
-    # Podes adicionar mais variáveis aqui...
+    "par_umol_m2_s" : list(range(low_limit, high_limit)), 
+    "nitrate_umol_l" : list(range(low_limit, high_limit)),
+    "wind_speed_m_s" : list(range(low_limit, 7)),
+    "upwelling_index" : list(range(low_limit, high_limit)),
+    "mixed_layer_depth_m" : list(range(low_limit, high_limit)),
+    "current_speed_m_s" :list(range(low_limit, high_limit)),
+    "river_discharge_index" : list(range(low_limit, high_limit)),
+    "cloud_fraction" : list(range(low_limit, high_limit)),
+    "turbidity_ntu" : list(range(low_limit, high_limit)),
+    "nitrate_x_par" : list(range(low_limit, high_limit)),
+    "wind_x_upwelling" : list(range(low_limit, high_limit)),
+    "sst_c_x_nitrate" : list(range(low_limit,high_limit))
     }
 
 def one_day_row(history: pd.DataFrame, day_features: pd.DataFrame,
@@ -76,20 +80,17 @@ def one_day_row(history: pd.DataFrame, day_features: pd.DataFrame,
     combined = pd.concat([history, today], ignore_index=True, sort=False)
 
     combined[TARGET] = np.log1p(combined[TARGET].astype(float))
-    exogenous_cols_mv = ["wind_speed_m_s", "upwelling_index", "current_speed_m_s", "cloud_fraction", "turbidity_ntu"]
-
-    window_size = 3
-    
-    for feature in (exogenous_cols_mv):
-        combined[feature] = combined[feature].rolling(window=window_size, min_periods=1).mean()
 
     combined["nitrate_x_par"] = combined["nitrate_umol_l"] * combined["par_umol_m2_s"]
     combined["wind_x_upwelling"] = combined["wind_speed_m_s"] * combined["upwelling_index"]
-    combined["river_div_turbidity"] = combined["river_discharge_index"] / (combined["turbidity_ntu"] + 1)
-
+    combined["sst_c_x_nitrate"] = combined["sst_c"] * combined["nitrate_umol_l"]
 
     lagged = build_lagged_frame(combined, lag_spec=lag_spec, require_target=False)
+    lagged = semi_anual_sinusoidals(lagged)
+
+
     row = lagged.tail(1).drop(columns=[DATE, TARGET], errors="ignore")
+    
     if len(row) != 1:
         raise ValueError("insufficient history to construct the requested lags")
     return row
