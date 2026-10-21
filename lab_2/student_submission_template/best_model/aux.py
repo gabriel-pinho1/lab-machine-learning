@@ -5,12 +5,6 @@ from __future__ import annotations
 from typing import Any
 import pandas as pd
 import numpy as np
-<<<<<<< Updated upstream
-=======
-
-DATE = "date"
-TARGET = "chlorophyll_a_mg_m3"
->>>>>>> Stashed changes
 
 DATE = "date"
 TARGET = "chlorophyll_a_mg_m3"
