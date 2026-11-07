@@ -32,28 +32,25 @@ def main() -> None:
    
     
     
-    Y = df["HAB"]
-    X = df.drop(columns = ["Date", "HAB"])
-    test_mask = df["Date"].dt.year == 2020
+    Y_cv = df["HAB"]
+    X_cv = df.drop(columns = ["Date", "HAB"])
 
-    X_cv = X[~test_mask].copy().reset_index(drop=True)
-    Y_cv = Y[~test_mask].copy().reset_index(drop=True)
 
-    X_test = X[test_mask].copy().reset_index(drop=True)
-    Y_test = Y[test_mask].copy().reset_index(drop=True)
+    
 
     # 2. Build CV splits dynamically using dates in X_cv
-    cv_dates = df.loc[~test_mask, "Date"].reset_index(drop=True)
+    cv_dates = df["Date"]
     cv_years = cv_dates.dt.year.values
 
-    validation_years = [2016, 2017, 2018, 2019]
-
+    validation_years = [2016,2018,2019] # 2017 has no true positives therefore AUC is not defined
+    test_years = [2017,2019,2020]
     custom_cv_splits = []
-    for val_year in validation_years:
+    for val_year, test_year in zip(validation_years, test_years):
         train_idx = np.where(cv_years < val_year)[0]
 
         val_idx = np.where(cv_years == val_year)[0]
-        custom_cv_splits.append((train_idx, val_idx))
+        test_idx = np.where(cv_years == test_year)[0]
+        custom_cv_splits.append((train_idx, val_idx, test_idx))
     scaler = StandardScaler()
     tree_depth_vec = [3,5,10,None]
     min_sample_split_vec = [2, 5, 10]
@@ -72,11 +69,10 @@ def main() -> None:
             for criterion in criterion_vec:
                 for depth in tree_depth_vec:
                     fold_auc = []
-                    for train_index, val_index in custom_cv_splits:
+                    for train_index, val_index, test_index in custom_cv_splits:
                         X_train_fold, X_val_fold = X_cv.iloc[train_index].copy(), X_cv.iloc[val_index].copy()
                         
                         Y_train_fold, Y_val_fold = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
-
                         
 
                         tree_model = clf = DecisionTreeClassifier(
@@ -113,9 +109,29 @@ def main() -> None:
     print(f"   min_samples_split: {split_best}")
     print("=" * 40)
 
-
+    #testing the tree
+    test_auc=[]
+    for train_index, val_index, test_index in custom_cv_splits:
+        combined_idx = np.concatenate([train_index, val_index])
+        X_train_fold_complete = X_cv.iloc[combined_idx].copy()
+        X_test_fold = X_cv.iloc[test_index].copy()
+        Y_train_fold = 
  
-
+        tree_model = clf = DecisionTreeClassifier(
+                        criterion= criterion_best,         # 'gini' ou 'entropy'
+                        max_depth=depth_best,              # Limita a profundidade máxima a 5 níveis
+                        min_samples_split=split_best,     # Um nó precisa de ter pelo menos 10 amostras para ser dividido
+                        min_samples_leaf=leaf_best,       # Cada folha deve ter pelo menos 4 amostras
+                        max_features='sqrt',      # Utiliza sqrt(n_features) em cada divisão
+                        random_state=42           # Garante a reprodução dos mesmos resultados
+                    )
+        tree_model.fit(X_train_fold, Y_train_fold)
+        y_prob = tree_model.predict_proba(X_val_fold)[:, 1]
+        auc = roc_auc_score(Y_val_fold, y_prob)
+        if not np.isnan(auc):
+            test_auc.append(auc)
+    
+    mean_score = np.mean(test_auc)
 
 
 
