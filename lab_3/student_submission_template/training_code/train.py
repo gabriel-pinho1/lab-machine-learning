@@ -10,10 +10,7 @@ import pandas as pd
 from scipy.stats import zscore
 
 from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import r2_score, mean_absolute_error
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import roc_auc_score
 from aux import read_table
@@ -109,29 +106,7 @@ def main() -> None:
     print(f"   min_samples_split: {split_best}")
     print("=" * 40)
 
-    #testing the tree
-    test_auc=[]
-    for train_index, val_index, test_index in custom_cv_splits:
-        combined_idx = np.concatenate([train_index, val_index])
-        X_train_fold_complete = X_cv.iloc[combined_idx].copy()
-        X_test_fold = X_cv.iloc[test_index].copy()
-        Y_train_fold = 
  
-        tree_model = clf = DecisionTreeClassifier(
-                        criterion= criterion_best,         # 'gini' ou 'entropy'
-                        max_depth=depth_best,              # Limita a profundidade máxima a 5 níveis
-                        min_samples_split=split_best,     # Um nó precisa de ter pelo menos 10 amostras para ser dividido
-                        min_samples_leaf=leaf_best,       # Cada folha deve ter pelo menos 4 amostras
-                        max_features='sqrt',      # Utiliza sqrt(n_features) em cada divisão
-                        random_state=42           # Garante a reprodução dos mesmos resultados
-                    )
-        tree_model.fit(X_train_fold, Y_train_fold)
-        y_prob = tree_model.predict_proba(X_val_fold)[:, 1]
-        auc = roc_auc_score(Y_val_fold, y_prob)
-        if not np.isnan(auc):
-            test_auc.append(auc)
-    
-    mean_score = np.mean(test_auc)
 
 
 
@@ -156,7 +131,15 @@ def main() -> None:
 
 
 
-    final_model = 0
+    final_model = DecisionTreeClassifier(
+        criterion=criterion_best,
+        max_depth=depth_best,
+        min_samples_split=split_best,
+        min_samples_leaf=leaf_best,
+        max_features="sqrt",
+        random_state=42,
+    )
+    final_model.fit(X_cv, Y_cv)
 
 
     model_artifact = {
