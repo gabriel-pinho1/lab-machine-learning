@@ -24,16 +24,15 @@ def main() -> None:
 
     df = read_table(args.data)
     # Apply mapping
-    season_map = {'winter': 0, 'spring': 1, 'summer': 2, 'fall': 3}
-    df['Season'] = df['Season'].astype(str).str.lower().map(season_map)
+    
    
     
     
     Y_cv = df["HAB"]
     X_cv = df.drop(columns = ["Date", "HAB"])
-    
-    PREPROCESSING_TAG = None
 
+    PREPROCESSING_TAG = None
+    # TAG structure e.g. "drop Variable + Add Variable + what was done to andle missing data etc"
     
 
     # 2. Build CV splits dynamically using dates in X_cv
@@ -158,4 +157,4 @@ if __name__ == "__main__":
     main()
 
 
-#python train_tree.py --data ../../data/classification_task1_train.csv --output ../best_model/model_tree.pkl
+#python train_svm.py --data ../../data/classification_task1_train.csv --output ../best_model/model_svm.pkl

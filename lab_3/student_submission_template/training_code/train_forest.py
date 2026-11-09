@@ -35,7 +35,7 @@ def main() -> None:
     X_cv = df.drop(columns = ["Date", "HAB"])
 
     PREPROCESSING_TAG = None
-    
+    # TAG structure e.g. "drop Variable + Add Variable + what was done to andle missing data etc"
 
     # 2. Build CV splits dynamically using dates in X_cv
     cv_dates = df["Date"]

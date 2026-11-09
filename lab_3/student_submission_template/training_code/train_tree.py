@@ -33,7 +33,7 @@ def main() -> None:
     X_cv = df.drop(columns = ["Date", "HAB"])
 
     PREPROCESSING_TAG = None
-    
+    # TAG structure e.g. "drop Variable + Add Variable + what was done to andle missing data etc"
 
     # 2. Build CV splits dynamically using dates in X_cv
     cv_dates = df["Date"]
@@ -156,7 +156,7 @@ def main() -> None:
 
     log_experiment(
             
-            model_type="RandomForestClassifier",
+            model_type="RandomTreeClassifier",
             preprocessing_tag=PREPROCESSING_TAG,
             val_auc=mean_best,
             best_params=best_hyperparams,
