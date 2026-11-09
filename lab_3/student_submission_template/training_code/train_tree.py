@@ -158,4 +158,4 @@ if __name__ == "__main__":
     main()
 
 
-#python train.py --data ../../data/classification_task1_train.csv --output ../best_model/model.pkl
+#python train_tree.py --data ../../data/classification_task1_train.csv --output ../best_model/model_tree.pkl
