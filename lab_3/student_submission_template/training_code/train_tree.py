@@ -13,7 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import roc_auc_score
-from aux import read_table
+from aux import read_table, log_experiment
 
 
 def main() -> None:
@@ -32,7 +32,7 @@ def main() -> None:
     Y_cv = df["HAB"]
     X_cv = df.drop(columns = ["Date", "HAB"])
 
-
+    PREPROCESSING_TAG = None
     
 
     # 2. Build CV splits dynamically using dates in X_cv
@@ -48,7 +48,6 @@ def main() -> None:
         val_idx = np.where(cv_years == val_year)[0]
         test_idx = np.where(cv_years == test_year)[0]
         custom_cv_splits.append((train_idx, val_idx, test_idx))
-    scaler = StandardScaler()
     tree_depth_vec = [3,5,10,None]
     min_sample_split_vec = [2, 5, 10]
     min_samples_leaf_vec =  [1, 2, 4]
@@ -110,11 +109,6 @@ def main() -> None:
 
 
 
-    '''scaler = StandardScaler()
-                        X_train_fold_scaled = pd.DataFrame(scaler.fit_transform(X_train_fold), columns=X_train_fold.columns)
-                        # scalling based on the mean of the test data p
-                        X_val_fold_scaled = pd.DataFrame(scaler.transform(X_val_fold), columns=X_val_fold.columns)'''
-
 
 
 
@@ -150,7 +144,24 @@ def main() -> None:
         pickle.dump(model_artifact, f)
 
 
+    best_hyperparams = {
+        
+        "criterion":criterion_best,
+        "max_depth":depth_best,
+        "min_samples_split":split_best,
+        "min_samples_leaf": leaf_best,
+        "max_features":"sqrt",
+        "random_state" :42,
+        }
 
+    log_experiment(
+            
+            model_type="RandomForestClassifier",
+            preprocessing_tag=PREPROCESSING_TAG,
+            val_auc=mean_best,
+            best_params=best_hyperparams,
+        
+        )
 
 
 

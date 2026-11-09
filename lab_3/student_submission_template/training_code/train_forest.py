@@ -14,13 +14,14 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import roc_auc_score
-from aux import read_table
+from aux import read_table, log_experiment
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    
     args = parser.parse_args()
 
     df = read_table(args.data)
@@ -33,7 +34,7 @@ def main() -> None:
     Y_cv = df["HAB"]
     X_cv = df.drop(columns = ["Date", "HAB"])
 
-
+    PREPROCESSING_TAG = None
     
 
     # 2. Build CV splits dynamically using dates in X_cv
@@ -49,7 +50,7 @@ def main() -> None:
         val_idx = np.where(cv_years == val_year)[0]
         test_idx = np.where(cv_years == test_year)[0]
         custom_cv_splits.append((train_idx, val_idx, test_idx))
-    scaler = StandardScaler()
+    
     
     class_weight_vec = ["balanced", None]
     tree_depth_vec = [3,5,10,None]
@@ -175,7 +176,6 @@ def main() -> None:
     plt.xlabel("Number of Trees")
     plt.ylabel("Validation ROC-AUC")
     plt.grid(True, linestyle="--", alpha=0.7)
-    plt.legend()
     plt.tight_layout()
     plt.show()
     plt.savefig("tree_number_study.png", dpi=300, bbox_inches='tight')
@@ -202,8 +202,25 @@ def main() -> None:
     with open(args.output, "wb") as f:
         pickle.dump(model_artifact, f)
 
+        best_hyperparams = {
+        "n_estimators" : diminished_returns,
+        "class_weight" : weight_best,
+        "criterion":criterion_best,
+        "max_depth":depth_best,
+        "min_samples_split":split_best,
+        "min_samples_leaf": leaf_best,
+        "max_features":"sqrt",
+        "random_state" :42,
+        }
 
-
+    log_experiment(
+            
+            model_type="RandomForestClassifier",
+            preprocessing_tag=PREPROCESSING_TAG,
+            val_auc=mean_best,
+            best_params=best_hyperparams,
+        
+        )
 
 
 
