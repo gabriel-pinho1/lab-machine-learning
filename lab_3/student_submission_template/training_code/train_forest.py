@@ -25,6 +25,7 @@ def main() -> None:
     args = parser.parse_args()
 
     df = read_table(args.data)
+
     # Apply mapping
     season_map = {'winter': 0, 'spring': 1, 'summer': 2, 'fall': 3}
     df['Season'] = df['Season'].astype(str).str.lower().map(season_map)
@@ -162,7 +163,7 @@ def main() -> None:
     mean_auc_curve = np.mean(fold_curves, axis=0)
     auc_700 = mean_auc_curve[-1]
     window = 6  # Current step k + the next 5 tested steps
-    threshold = 0.995 * auc_700
+    threshold = 0.998 * auc_700
     diminished_returns = tree_steps[-1]  # Fallback to 700 if plateau isn't sustained
 
     for i in range(len(tree_steps) - window + 1):
