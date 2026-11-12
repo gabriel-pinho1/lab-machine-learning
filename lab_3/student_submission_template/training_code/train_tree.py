@@ -13,7 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import roc_auc_score
-from aux import read_table, log_experiment
+from aux import read_table, log_experiment, month_sine
 
 
 def main() -> None:
@@ -30,9 +30,9 @@ def main() -> None:
     
     
     Y_cv = df["HAB"]
-    X_cv = df.drop(columns = ["Date", "HAB"])
+    X_cv = df.drop(columns = ["Date", "HAB","Year","Day", "CHL_uncertainty", "CHL"])
 
-    PREPROCESSING_TAG = None
+    PREPROCESSING_TAG = "drop CHL + drop CHL_uncertainty "
     # TAG structure e.g. "drop Variable + Add Variable + what was done to andle missing data etc"
 
     # 2. Build CV splits dynamically using dates in X_cv
@@ -52,7 +52,7 @@ def main() -> None:
     min_sample_split_vec = [2, 5, 10]
     min_samples_leaf_vec =  [1, 2, 4]
     criterion_vec = ['gini', 'entropy']
-
+    random_state = 42
     mean_best = -1.0
     criterion_best = None
     leaf_best = None
@@ -71,13 +71,13 @@ def main() -> None:
                         Y_train_fold, Y_val_fold = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
                         
 
-                        tree_model = clf = DecisionTreeClassifier(
+                        tree_model = DecisionTreeClassifier(
                                             criterion= criterion,         # 'gini' ou 'entropy'
                                             max_depth=depth,              # Limita a profundidade máxima a 5 níveis
                                             min_samples_split=sample_split,     # Um nó precisa de ter pelo menos 10 amostras para ser dividido
                                             min_samples_leaf=sample_leaf,       # Cada folha deve ter pelo menos 4 amostras
                                             max_features='sqrt',      # Utiliza sqrt(n_features) em cada divisão
-                                            random_state=42           # Garante a reprodução dos mesmos resultados
+                                            random_state=random_state           # Garante a reprodução dos mesmos resultados
                                         )
                         tree_model.fit(X_train_fold, Y_train_fold)
                         y_prob = tree_model.predict_proba(X_val_fold)[:, 1]
@@ -131,7 +131,7 @@ def main() -> None:
         min_samples_split=split_best,
         min_samples_leaf=leaf_best,
         max_features="sqrt",
-        random_state=42,
+        random_state=random_state,
     )
     final_model.fit(X_cv, Y_cv)
 
@@ -151,7 +151,7 @@ def main() -> None:
         "min_samples_split":split_best,
         "min_samples_leaf": leaf_best,
         "max_features":"sqrt",
-        "random_state" :42,
+        "random_state" :random_state,
         }
 
     log_experiment(

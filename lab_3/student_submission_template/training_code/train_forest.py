@@ -14,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import roc_auc_score
-from aux import read_table, log_experiment
+from aux import read_table, log_experiment, month_sine
 
 
 def main() -> None:
@@ -32,9 +32,9 @@ def main() -> None:
     
     
     Y_cv = df["HAB"]
-    X_cv = df.drop(columns = ["Date", "HAB"])
+    X_cv = df.drop(columns = ["Date", "HAB","Year","Day", "CHL_uncertainty", "CHL"])
 
-    PREPROCESSING_TAG = None
+    PREPROCESSING_TAG = "drop CHL + drop CHL_uncertainty + drop Year + drop Day"
     # TAG structure e.g. "drop Variable + Add Variable + what was done to andle missing data etc"
 
     # 2. Build CV splits dynamically using dates in X_cv
@@ -57,7 +57,7 @@ def main() -> None:
     min_sample_split_vec = [2, 5]
     min_samples_leaf_vec =  [1, 3]
     
-    
+    random_state = 42
 
     mean_best = -1.0
     criterion_best = None
@@ -73,7 +73,7 @@ def main() -> None:
             for sample_split in min_sample_split_vec:
                 for depth in tree_depth_vec:
                     fold_auc = []
-                    for train_index, val_index, test_index in custom_cv_splits:
+                    for train_index, val_index, test_idx in custom_cv_splits:
                         X_train_fold, X_val_fold = X_cv.iloc[train_index].copy(), X_cv.iloc[val_index].copy()
                         
                         Y_train_fold, Y_val_fold = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
@@ -88,7 +88,7 @@ def main() -> None:
                                             min_samples_leaf=sample_leaf,       # Cada folha deve ter pelo menos 4 amostras
                                             max_features='sqrt',      # Utiliza sqrt(n_features) em cada divisão
                                             n_jobs=-1,                # Usa mais cores do CPU
-                                            random_state=42           # Garante a reprodução dos mesmos resultados
+                                            random_state=random_state           # Garante a reprodução dos mesmos resultados
                                         )
                         forest_model.fit(X_train_fold, Y_train_fold)
                         y_prob = forest_model.predict_proba(X_val_fold)[:, 1]
@@ -127,58 +127,55 @@ def main() -> None:
 
 
 
-    big_model = RandomForestClassifier(   # model with a lot of trees to determine diminishing returns
-    n_estimators= 700,
-    n_jobs = -1,
-    class_weight = weight_best,
-    criterion=criterion_best,
-    max_depth=depth_best,
-    min_samples_split=split_best,
-    min_samples_leaf=leaf_best,
-    max_features="sqrt",
-    random_state=42,
-        )
-    big_model.fit(X_train_fold, Y_train_fold)
-
-    y_prob = big_model.predict_proba(X_val_fold)[:, 1]
-    auc_500 = roc_auc_score(Y_val_fold, y_prob)
-
-    all_tree_probs = np.array(
-    [tree.predict_proba(X_val_fold.values)[:, 1] for tree in big_model.estimators_]
-    )
-
-    # 3. Compute validation ROC-AUC cumulatively at step intervals
+    # Posterior forest size iteration across ALL validation years
     tree_steps = range(10, 701, 10)
-    val_auc_scores = []
+    fold_curves = []
 
-    for k in tree_steps:
-        # Average probabilities across the first k trees
-        cum_probs = np.mean(all_tree_probs[:k], axis=0)
-        score = roc_auc_score(Y_val_fold, cum_probs)
-        val_auc_scores.append(score)
+    for train_index, val_index, _ in custom_cv_splits:
+        X_tr, X_va = X_cv.iloc[train_index], X_cv.iloc[val_index]
+        Y_tr, Y_va = Y_cv.iloc[train_index], Y_cv.iloc[val_index]
 
+        big_model = RandomForestClassifier(
+            n_estimators=700,
+            n_jobs=-1,
+            class_weight=weight_best,
+            criterion=criterion_best,
+            max_depth=depth_best,
+            min_samples_split=split_best,
+            min_samples_leaf=leaf_best,
+            max_features="sqrt",
+            random_state=random_state,
+        )
+        big_model.fit(X_tr, Y_tr)
 
-    diminished_returns = 700  
-    for k, score in zip(tree_steps, val_auc_scores):
-        if (score / auc_500) >= 0.995:
-            diminished_returns = k
-            break    
+        all_tree_probs = np.array(
+            [tree.predict_proba(X_va.values)[:, 1] for tree in big_model.estimators_]
+        )
+
+        fold_scores = [
+            roc_auc_score(Y_va, np.mean(all_tree_probs[:k], axis=0))
+            for k in tree_steps
+        ]
+        fold_curves.append(fold_scores)
+
+    # Mean ROC-AUC curve across 2016, 2018, and 2019
+    mean_auc_curve = np.mean(fold_curves, axis=0)
+    auc_700 = mean_auc_curve[-1]
+    window = 6  # Current step k + the next 5 tested steps
+    threshold = 0.995 * auc_700
+    diminished_returns = tree_steps[-1]  # Fallback to 700 if plateau isn't sustained
+
+    for i in range(len(tree_steps) - window + 1):
+        if all(score >= threshold for score in mean_auc_curve[i : i + window]):
+            diminished_returns = tree_steps[i]
+            break
 
     print("=" * 40)
-    print(f" Full 700-Tree ROC-AUC:            {auc_500:.4f}")
+    print(f" Full 700-Tree Mean ROC-AUC:       {auc_700:.4f}")
     print(f" Diminishing Returns Tree Cutoff:  {diminished_returns}")
     print("=" * 40)
         
-    # 4. Plot the diminishing returns curve
-    plt.figure(figsize=(9, 5))
-    plt.plot(tree_steps, val_auc_scores, marker="o", linewidth=2)
-    plt.title("Validation ROC-AUC vs. Number of Trees (n_estimators)")
-    plt.xlabel("Number of Trees")
-    plt.ylabel("Validation ROC-AUC")
-    plt.grid(True, linestyle="--", alpha=0.7)
-    plt.tight_layout()
-    plt.show()
-    plt.savefig("tree_number_study.png", dpi=300, bbox_inches='tight')
+
 
 
     final_model = RandomForestClassifier(   # model with a lot of trees to determine diminishing returns
@@ -190,7 +187,7 @@ def main() -> None:
     min_samples_split=split_best,
     min_samples_leaf=leaf_best,
     max_features="sqrt",
-    random_state=42,
+    random_state=random_state,
         )
     final_model.fit(X_cv, Y_cv)
 
@@ -210,7 +207,7 @@ def main() -> None:
         "min_samples_split":split_best,
         "min_samples_leaf": leaf_best,
         "max_features":"sqrt",
-        "random_state" :42,
+        "random_state" :random_state,
         }
 
     log_experiment(

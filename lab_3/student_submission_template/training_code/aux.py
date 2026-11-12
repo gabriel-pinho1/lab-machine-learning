@@ -16,6 +16,16 @@ def read_table(path: str | Path) -> pd.DataFrame:
     df[DATE] = pd.to_datetime(df[DATE])
     return df.sort_values(DATE).reset_index(drop=True)
 
+def month_sine(df: pd.DataFrame):
+    df = df.copy()
+
+    df["Month_sine"] = np.sin(2*np.pi*df["Month"]/12)
+    df["Month_cos"] = np.cos(2*np.pi*df["Month"]/12)
+
+    df = df.drop(columns=["Month"])
+    
+    return df
+
 
 def log_experiment(
     

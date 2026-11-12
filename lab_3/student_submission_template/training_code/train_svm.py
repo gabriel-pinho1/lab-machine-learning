@@ -10,10 +10,9 @@ import pandas as pd
 from scipy.stats import zscore
 
 from sklearn.preprocessing import StandardScaler
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.svm import SVC
 from sklearn.metrics import roc_auc_score
-from aux import read_table
+from aux import read_table, log_experiment, month_sine
 
 
 def main() -> None:
@@ -23,15 +22,22 @@ def main() -> None:
     args = parser.parse_args()
 
     df = read_table(args.data)
-    # Apply mapping
+
+    df = month_sine(df)
+
+
+    scaler = StandardScaler()
+    
     
    
     
     
     Y_cv = df["HAB"]
-    X_cv = df.drop(columns = ["Date", "HAB"])
+    X_raw = df.drop(columns = ["Date", "HAB","Year","Day", "CHL_uncertainty", "CHL", "Season"])
+    X_cv = pd.DataFrame(scaler.fit_transform(X_raw), columns=X_raw.columns)
 
-    PREPROCESSING_TAG = None
+
+    PREPROCESSING_TAG = "drop CHL + drop CHL_uncertainty + drop Season + repalce Month"
     # TAG structure e.g. "drop Variable + Add Variable + what was done to andle missing data etc"
     
 
@@ -48,61 +54,69 @@ def main() -> None:
         val_idx = np.where(cv_years == val_year)[0]
         test_idx = np.where(cv_years == test_year)[0]
         custom_cv_splits.append((train_idx, val_idx, test_idx))
-    tree_depth_vec = [3,5,10,None]
-    min_sample_split_vec = [2, 5, 10]
-    min_samples_leaf_vec =  [1, 2, 4]
-    criterion_vec = ['gini', 'entropy']
+
+    C_vec = [0.1,1,10,100]
+    gamma_vec = ['scale', 0.001, 0.01, 0.1, 1]
+    kernel_vec = ['rbf', 'linear']
+    class_weight_vec =["balanced", None]
+    random_state = 42
+    
 
     mean_best = -1.0
-    criterion_best = None
-    leaf_best = None
-    split_best = None
-    depth_best = None
+    C_best = None
+    gamma_best = None
+    Kernel_best = None
+    class_weight_best = None
+   
 
     #tree hyperparameter cv
-    for sample_leaf in min_samples_leaf_vec:
-        for sample_split in min_sample_split_vec:
-            for criterion in criterion_vec:
-                for depth in tree_depth_vec:
-                    fold_auc = []
+
+    fold_auc = []
+    for C in C_vec:
+        for kernel in kernel_vec:
+            for gamma in gamma_vec:
+                for class_weight in class_weight_vec:
                     for train_index, val_index, test_index in custom_cv_splits:
                         X_train_fold, X_val_fold = X_cv.iloc[train_index].copy(), X_cv.iloc[val_index].copy()
                         
                         Y_train_fold, Y_val_fold = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
-                        
 
-                        tree_model = clf = DecisionTreeClassifier(
-                                            criterion= criterion,         # 'gini' ou 'entropy'
-                                            max_depth=depth,              # Limita a profundidade máxima a 5 níveis
-                                            min_samples_split=sample_split,     # Um nó precisa de ter pelo menos 10 amostras para ser dividido
-                                            min_samples_leaf=sample_leaf,       # Cada folha deve ter pelo menos 4 amostras
-                                            max_features='sqrt',      # Utiliza sqrt(n_features) em cada divisão
-                                            random_state=42           # Garante a reprodução dos mesmos resultados
-                                        )
-                        tree_model.fit(X_train_fold, Y_train_fold)
-                        y_prob = tree_model.predict_proba(X_val_fold)[:, 1]
+                        svm_model = SVC(
+                            kernel = kernel,
+                            gamma = gamma,
+                            class_weight = class_weight,
+                            C = C,
+                            random_state = random_state,
+                            probability=True
+                        )
+
+                        
+                        svm_model.fit(X_train_fold, Y_train_fold)
+                        y_prob = svm_model.predict_proba(X_val_fold)[:, 1]
                         auc = roc_auc_score(Y_val_fold, y_prob)
                         if not np.isnan(auc):
                             fold_auc.append(auc)
-                   
+                    
                     mean_score = np.mean(fold_auc)
 
                     if mean_score > mean_best:
                         mean_best = mean_score
-                        depth_best = depth
-                        criterion_best = criterion
-                        leaf_best = sample_leaf
-                        split_best = sample_split
+                        C_best = C
+                        gamma_best = gamma
+                        kernel_best = kernel
+                        class_weight_best = class_weight
+                    
 
     print("=" * 40)
     print("     BEST HYPERPARAMETER SEARCH RESULTS     ")
     print("=" * 40)
     print(f"Best Validation ROC-AUC Score: {mean_best:.4f}\n")
     print("Optimal Hyperparameters:")
-    print(f"   criterion:         '{criterion_best}'")
-    print(f"   max_depth:         {depth_best}")
-    print(f"   min_samples_leaf:  {leaf_best}")
-    print(f"   min_samples_split: {split_best}")
+    print(f"C                  : {C_best}")
+    print(f"gamma              : {gamma_best}")
+    print(f"kernel             : {kernel_best}")
+    print(f"class_weight       : {class_weight_best}")
+    
     print("=" * 40)
 
  
@@ -124,21 +138,39 @@ def main() -> None:
 
 
 
+    best_hyperparams ={
+
+        "kernel" : kernel_best,
+        "gamma" : gamma_best,
+        "class_weight" : class_weight_best,
+        "C": C_best,
+        "probability":True,
+        "random_state" : random_state
+    }
 
 
 
 
 
+    final_model = SVC(
 
-    final_model = DecisionTreeClassifier(
-        criterion=criterion_best,
-        max_depth=depth_best,
-        min_samples_split=split_best,
-        min_samples_leaf=leaf_best,
-        max_features="sqrt",
-        random_state=42,
+        kernel = kernel_best,
+        gamma = gamma_best,
+        class_weight = class_weight_best,
+        C = C_best,
+        probability=True,
+        random_state = random_state
     )
     final_model.fit(X_cv, Y_cv)
+
+    log_experiment(
+        
+        model_type="SVM",
+        preprocessing_tag=PREPROCESSING_TAG,
+        val_auc=mean_best,
+        best_params=best_hyperparams,
+    
+    )
 
 
     model_artifact = {
