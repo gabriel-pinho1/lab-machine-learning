@@ -19,7 +19,7 @@ from sklearn.model_selection import TimeSeriesSplit
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--output", required=False, type=Path)
 
 
     args = parser.parse_args()
@@ -114,8 +114,19 @@ def main() -> None:
 
         for train_index, val_index in custom_cv_splits:
             X_train_fold, X_val_fold = X_cv.iloc[train_index].copy(), X_cv.iloc[val_index].copy()
-            
+
             Y_train_fold, Y_val_fold = Y_cv.iloc[train_index].copy(), Y_cv.iloc[val_index].copy()
+
+            y_train_zscores = zscore(Y_train_fold)
+        
+            train_outliers = (y_train_zscores < -3) | (y_train_zscores > 3)
+        
+            train_avg_3_above = Y_train_fold.rolling(window=3, min_periods=1).mean().shift(1)
+        
+            Y_train_fold.loc[train_outliers] = train_avg_3_above[train_outliers]
+        
+        
+            Y_train_fold = Y_train_fold.ffill().bfill()
 
             # Scalling the train data
             scaler = StandardScaler()
@@ -126,10 +137,18 @@ def main() -> None:
             # Clipping the outliers for both test and validation data
             for col in X_train_fold_scaled.columns:
                 if col.startswith("chlorophyll_a_mg_m3__lag_") or col.startswith("annual_sin") or col.startswith("annual_cos"):
-                    continue  
 
-                X_train_fold_scaled[col] = X_train_fold_scaled[col].clip(-3, 3)
-                X_val_fold_scaled[col] = X_val_fold_scaled[col].clip(-3, 3)
+                    train_outliers = (X_train_fold_scaled[col] < -3) | (X_train_fold_scaled[col] > 3)
+
+                    train_avg_3_above = X_train_fold_scaled[col].rolling(window=3, min_periods=1).mean().shift(1)
+
+                    X_train_fold_scaled.loc[train_outliers, col] = train_avg_3_above[train_outliers]
+                    
+                    X_train_fold_scaled[col] = X_train_fold_scaled[col].fillna(X_train_fold_scaled[col])
+
+                else:
+                    X_train_fold_scaled[col] = X_train_fold_scaled[col].clip(-3, 3)
+                    X_val_fold_scaled[col] = X_val_fold_scaled[col].clip(-3, 3)
             
             clf_lasso = linear_model.Lasso(alpha=alpha, max_iter=150000)
             clf_lasso.fit(X_train_fold_scaled, Y_train_fold)
@@ -451,3 +470,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+#python train.py --data ../../data/chlorophyll_student_2015_2023.xlsx 

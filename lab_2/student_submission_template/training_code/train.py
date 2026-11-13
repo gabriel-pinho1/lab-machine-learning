@@ -424,15 +424,14 @@ def main() -> None:
     X_final_scaled = pd.DataFrame(scaler_final.fit_transform(X_total), columns= X_total.columns).clip(-3, 3)
 
     # Comentar daqui
-    '''lasso_final = linear_model.Lasso(alpha = best_parsimonious_alpha, max_iter = 150000)
+    lasso_final = linear_model.Lasso(alpha = best_parsimonious_alpha, max_iter = 150000)
     lasso_final.fit(X_final_scaled, Y_total)
 
     coefficients_final = pd.Series(lasso_final.coef_, index = X_final_scaled.columns)
-    kept_features_final = coefficients_final[coefficients_final != 0.0].index.tolist()'''
-    # Até aqui
+    kept_features_final = coefficients_final[coefficients_final != 0.0].index.tolist()
 
-    X_final_cut = X_final_scaled.loc[:, features_parcimonious_model_kept]
-    #X_final_cut = X_final_scaled.loc[:, kept_features_final]
+    #X_final_cut = X_final_scaled.loc[:, features_parcimonious_model_kept]
+    X_final_cut = X_final_scaled.loc[:, kept_features_final]
 
     ridge_final = linear_model.Ridge(alpha = best_alpha_ridge_lasso, max_iter = 150000)
     ridge_final.fit(X_final_cut, Y_total)
@@ -440,8 +439,8 @@ def main() -> None:
     # Saving the final model
     model_artifact = {
     "scaler" : scaler_final,
-    #"kept_features" : kept_features_final,
-    "kept_features" : features_parcimonious_model_kept,
+    "kept_features" : kept_features_final,
+    #"kept_features" : features_parcimonious_model_kept,
     "model": ridge_final
     } 
 
