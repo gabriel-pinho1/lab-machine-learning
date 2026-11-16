@@ -22,14 +22,20 @@ def main() -> None:
     df = read_table(args.data)
     df = month_sine(df)
 
+    for c in range(6):
+        df[f"cluster_{c}"] = (df["spatial_cluster"] == c).astype(float)
+
+    for s in ["Winter", "Spring", "Summer", "Fall"]:
+        df[f"season_{s}"] = (df["Season"] == s).astype(float)
+
     Y_cv = df["HAB"]
     # Keep unscaled features here; scale inside each fold to prevent leakage
     X_cv = df.drop(
-        columns=["Date", "HAB", "Year", "Day", "CHL_uncertainty", "CHL", "Season"]
+        columns=["Date", "HAB", "Year", "Day", "CHL_uncertainty", "CHL", "Season", "spatial_cluster"]
     )
 
     PREPROCESSING_TAG = (
-        "drop CHL + drop CHL_uncertainty + drop Year + drop Day + drop Season + replace Month"
+        "drop CHL + drop CHL_uncertainty + drop Year + drop Day + drop Season + replace Month + replace cluster"
     )
 
     # Build temporal CV splits
