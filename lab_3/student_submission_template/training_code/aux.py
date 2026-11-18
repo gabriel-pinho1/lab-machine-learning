@@ -26,6 +26,28 @@ def month_sine(df: pd.DataFrame):
     
     return df
 
+def biannual_sine(df: pd.DataFrame):
+    df = df.copy()
+    doy = df["Date"].dt.dayofyear
+    df["bianual_sin"] = np.sin(4 * np.pi * doy / 365.25)
+    df["Bianual_cos"] = np.cos(4 * np.pi * doy / 365.25)
+
+    
+    
+    return df
+
+def trimester_sine(df: pd.DataFrame):
+    df = df.copy()
+    doy = df["Date"].dt.dayofyear
+    df["timester_sin"] = np.sin(8 * np.pi * doy / 365.25)
+    df["trimester_cos"] = np.cos(8 * np.pi * doy / 365.25)
+
+    
+    
+    return df
+
+
+
 
 def log_experiment(
     
