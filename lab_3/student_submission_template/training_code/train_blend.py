@@ -159,17 +159,12 @@ def main():
       + "\n"
   )
 
-  # 2. Sweep blend weights across raw probabilities and rank averages on CV
-  print("=== Blend Weight Sweep on CV (2016 / 2018 / 2019) ===")
-  print(
-      "w_lr | Raw Prob Mean AUC (2016/2018/2019) | Rank Avg Mean AUC"
-      " (2016/2018/2019)"
-  )
-  print("-" * 78)
 
+ 
+
+  
   blend_candidates = []
   for w_lr in np.round(np.linspace(0.0, 1.0, 11), 2):
-    mode_aucs = {}
     for mode in ["raw", "rank"]:
       aucs = [
           roc_auc_score(
@@ -178,30 +173,23 @@ def main():
           )
           for yr in val_years
       ]
-      mode_aucs[mode] = aucs
       blend_candidates.append((mode, float(w_lr), float(np.mean(aucs)), aucs))
-
-    r_aucs = mode_aucs["raw"]
-    k_aucs = mode_aucs["rank"]
-    print(
-        f"{w_lr:4.1f} | {np.mean(r_aucs):.4f}"
-        f" ({r_aucs[0]:.3f}/{r_aucs[1]:.3f}/{r_aucs[2]:.3f}) |"
-        f" {np.mean(k_aucs):.4f}"
-        f" ({k_aucs[0]:.3f}/{k_aucs[1]:.3f}/{k_aucs[2]:.3f})"
-    )
 
   best_mode, best_w_lr, best_blend_auc, best_blend_folds = max(
       blend_candidates, key=lambda r: r[2]
   )
   w_hgb = round(1.0 - best_w_lr, 1)
-
-  print(
-      f"\nWinning Blend -> mode={best_mode}, w_lr={best_w_lr:.1f},"
-      f" w_hgb={w_hgb:.1f}, CV AUC={best_blend_auc:.4f} (+/-"
-      f" {np.std(best_blend_folds):.4f})"
+  fold_str = ", ".join(
+      f"{yr}: {auc:.4f}" for yr, auc in zip(val_years, best_blend_folds)
   )
 
-  # 3. Single-shot holdout evaluation on 2020 (no individual model leaking)
+  print(
+      f"Winning Blend -> mode={best_mode}, w_lr={best_w_lr:.1f},"
+      f" w_hgb={w_hgb:.1f}, CV AUC={best_blend_auc:.4f} (+/-"
+      f" {np.std(best_blend_folds):.4f}) | {fold_str}"
+  )
+
+  
   test_year = 2020
   tr_idx = np.where(years < test_year)[0]
   te_idx = np.where(years == test_year)[0]
@@ -225,7 +213,7 @@ def main():
   print(f"\n====== EXTERNAL HOLDOUT EVALUATION (TEST {test_year}) ======")
   print(f"AUC Test {test_year} (Winning Blend): {test_auc:.4f}")
 
-  # 4. Log experiment to registry
+ 
   PREPROCESSING_TAG = (
       "LR(drop CHL, cyclical+onehot) + HGB(native CHL NaNs, native Season &"
       " cluster, drop YDOY)"
@@ -244,7 +232,7 @@ def main():
       },
   )
 
-  # 5. Refit both models together on the full dataset (2015-2020) and serialize
+  
   final_scaler = StandardScaler()
   X_full_lr_mat = np.hstack([
       final_scaler.fit_transform(X_lr_all[num_cols]),
