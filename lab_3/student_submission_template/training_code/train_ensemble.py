@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import pickle
 
-from aux import log_experiment, read_table, flag_chl
+from aux import log_experiment, read_table, flag_chl, log_chl
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
@@ -57,21 +57,26 @@ def prepare_split(X: pd.DataFrame,Y: pd.Series,train_idx: np.ndarray,val_idx: np
 
 
 
-def _evaluate_params(params: dict, folds: list):
+def _evaluate_params(params: dict, folds: list, tune_seeds=(42, 0, 1)):
   val_scores = {}
   train_scores = {}
 
   for year, X_tr, Y_tr, X_va, Y_va in folds:
-    model = MLPClassifier(**params, max_iter=100000, random_state=42)
-    model.fit(X_tr, Y_tr)
+    val_preds = []
+    train_preds = []
+    for seed in tune_seeds:
+      model = MLPClassifier(**params, max_iter=100000, random_state=seed)
+      model.fit(X_tr, Y_tr)
+      val_preds.append(model.predict_proba(X_va)[:, 1])
+      train_preds.append(model.predict_proba(X_tr)[:, 1])
 
-    val_scores[year] = roc_auc_score(Y_va, model.predict_proba(X_va)[:, 1])
-    train_scores[year] = roc_auc_score(Y_tr, model.predict_proba(X_tr)[:, 1])
+    val_scores[year] = roc_auc_score(Y_va, np.mean(val_preds, axis=0))
+    train_scores[year] = roc_auc_score(Y_tr, np.mean(train_preds, axis=0))
 
-  mean_val_score = np.mean(list(val_scores.values()))
-  mean_train_score = np.mean(list(train_scores.values()))
+  mean_val_score = float(np.mean(list(val_scores.values())))
+  mean_train_score = float(np.mean(list(train_scores.values())))
 
-  return (params,mean_val_score,{"val_scores": val_scores,"train_scores": train_scores,"mean_train": mean_train_score,}, )
+  return (params, mean_val_score,{"val_scores": val_scores,"train_scores": train_scores,"mean_train": mean_train_score,},)
 
 def evaluate_ensemble_cv(folds: list, best_params: dict, n_models: int = 10):
   val_scores = {}
@@ -86,6 +91,13 @@ def evaluate_ensemble_cv(folds: list, best_params: dict, n_models: int = 10):
 
   mean_val = float(np.mean(list(val_scores.values())))
   mean_train = float(np.mean(list(train_scores.values())))
+  individual_aucs = [
+    roc_auc_score(Y_va, est.predict_proba(X_va)[:, 1])
+    for est in ensemble.estimators_
+    ]
+  print(
+       f"Year {year} individual seed AUCs: {[round(a, 4) for a in individual_aucs]}"
+    )
   return mean_val, {
       "val_scores": val_scores,
       "train_scores": train_scores,
@@ -118,6 +130,7 @@ def main():
 
   doy = df["Date"].dt.dayofyear
   df["YDOY_sin"] = np.sin(2 * np.pi * doy / 365.25)
+
   df = flag_chl(df)  
 
   Y_all = df["HAB"]
@@ -127,7 +140,7 @@ def main():
   years = df["Date"].dt.year.values
 
   PREPROCESSING_TAG = (
-      "flag CHL + drop Year + drop Month + drop Day + "
+      "flag CHL + log CHL + drop Year + drop Month + drop Day + "
       "replace Season + replace cluster"
   )
 
@@ -177,6 +190,8 @@ def main():
   for yr, auc in best_details["val_scores"].items():
     train_auc = best_details["train_scores"][yr]
     print(f"  Year {yr} | Train AUC: {train_auc:.4f} -> Val AUC: {auc:.4f}")
+
+
 
   test_year = 2020
   X_tr_test, Y_tr_test, X_te, Y_te = prepare_split(
@@ -238,4 +253,4 @@ def main():
 if __name__ == "__main__":
   main()
 
-# python train_NN.py --data ../../data/classification_task1_train.csv --output ../best_model/model_NN.pkl
+# python train_ensemble.py --data ../../data/classification_task1_train.csv --output ../best_model/model_ensemble.pkl

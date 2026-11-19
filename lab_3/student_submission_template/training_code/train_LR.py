@@ -74,12 +74,12 @@ def main():
 
     Y_all = df["HAB"]
     X_all = df.drop(
-        columns=["Date", "HAB", "Year", "Day", "Season", "spatial_cluster"]
+        columns=["CHL", "CHL_uncertainty","Date", "HAB", "Year", "Day", "Season", "spatial_cluster"]
     )
     years = df["Date"].dt.year.values
 
     PREPROCESSING_TAG = (
-        "log CHL + drop Year + drop Day + "
+        "Drop CHL + drop Year + drop Day + "
         "replace Season + replace Month + replace cluster +"
         " trimester sine"
     )
@@ -158,7 +158,7 @@ def main():
     )
 
     # Refit scaler and model on the full dataset (including 2020) before saving
-    X_full = X_all.drop(columns=["CHL", "CHL_uncertainty"])
+    X_full = X_all
     final_scaler = StandardScaler()
     X_full_mat = np.hstack(
         [final_scaler.fit_transform(X_full[num_cols]), X_full[binary_cols].values]
