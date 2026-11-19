@@ -21,6 +21,7 @@ def main() -> None:
 
     df = read_table(args.data)
     df = month_sine(df)
+    df = biannual_sine(df)
 
     for c in range(6):
         df[f"cluster_{c}"] = (df["spatial_cluster"] == c).astype(float)
@@ -35,7 +36,7 @@ def main() -> None:
     )
 
     PREPROCESSING_TAG = (
-        "drop CHL + drop CHL_uncertainty + drop Year + drop Day + drop Season + replace Month + replace cluster"
+        "drop CHL + drop CHL_uncertainty + drop Year + drop Day + drop Season + replace Month + replace cluster + bianual sine"
     )
 
     # Build temporal CV splits

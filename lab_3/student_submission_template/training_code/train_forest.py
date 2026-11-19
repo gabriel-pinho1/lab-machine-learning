@@ -14,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import roc_auc_score
-from aux import read_table, log_experiment, month_sine
+from aux import read_table, log_experiment, month_sine, trimester_sine
 
 
 def main() -> None:
@@ -25,17 +25,26 @@ def main() -> None:
     args = parser.parse_args()
 
     df = read_table(args.data)
+    df = trimester_sine(df)
 
     # Apply mapping
     season_map = {'winter': 0, 'spring': 1, 'summer': 2, 'fall': 3}
     df['Season'] = df['Season'].astype(str).str.lower().map(season_map)
    
     
+    for c in range(6):
+        df[f"cluster_{c}"] = (df["spatial_cluster"] == c).astype(float)
+
+    for s in ["Winter", "Spring", "Summer", "Fall"]:
+        df[f"season_{s}"] = (df["Season"] == s).astype(float)
+
+    doy = df["Date"].dt.dayofyear
+    df["YDOY_sin"] = np.sin(2 * np.pi * doy / 365.25)
     
     Y_cv = df["HAB"]
     X_cv = df.drop(columns = ["Date", "HAB","Year","Day", "CHL_uncertainty", "CHL"])
 
-    PREPROCESSING_TAG = "drop CHL + drop CHL_uncertainty + drop Year + drop Day"
+    PREPROCESSING_TAG = "drop CHL + drop CHL_uncertainty + drop Year + drop Day + Replace Cluster + Replace Season"
     # TAG structure e.g. "drop Variable + Add Variable + what was done to andle missing data etc"
 
     # 2. Build CV splits dynamically using dates in X_cv

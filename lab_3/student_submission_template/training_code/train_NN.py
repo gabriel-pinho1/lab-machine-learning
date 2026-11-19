@@ -4,19 +4,17 @@ import argparse
 from pathlib import Path
 import pickle
 
-from aux import log_experiment, read_table
+from aux import log_experiment, read_table, flag_chl
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import ParameterGrid
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
+from joblib import Parallel, delayed
 
 
-def flag_chl(df: pd.DataFrame) -> pd.DataFrame:
-  df = df.copy()
-  df["CHL_flag"] = df["CHL"].notna().astype(float)
-  return df
+
 
 
 def prepare_split(X: pd.DataFrame,Y: pd.Series,train_idx: np.ndarray,val_idx: np.ndarray,num_cols: list[str],binary_cols: list[str],):
@@ -42,32 +40,41 @@ def prepare_split(X: pd.DataFrame,Y: pd.Series,train_idx: np.ndarray,val_idx: np
   return X_tr_mat, Y_tr.values, X_val_mat, Y_val.values
 
 
-def tune_hyperparameters_nn(folds: list, param_grid: list):
-  best_params, best_score, best_details = None, -1.0, {}
 
-  for params in param_grid:
-    val_scores = {}
-    train_scores = {}
 
-    for year, X_tr, Y_tr, X_va, Y_va in folds:
-      model = MLPClassifier(**params, max_iter=100000, random_state=42)
-      model.fit(X_tr, Y_tr)
 
-      val_scores[year] = roc_auc_score(Y_va, model.predict_proba(X_va)[:, 1])
-      train_scores[year] = roc_auc_score(Y_tr, model.predict_proba(X_tr)[:, 1])
+def _evaluate_params(params: dict, folds: list):
+  val_scores = {}
+  train_scores = {}
 
-    mean_val_score = np.mean(list(val_scores.values()))
-    mean_train_score = np.mean(list(train_scores.values()))
+  for year, X_tr, Y_tr, X_va, Y_va in folds:
+    model = MLPClassifier(**params, max_iter=100000, random_state=42)
+    model.fit(X_tr, Y_tr)
 
-    if mean_val_score > best_score:
-      best_score = mean_val_score
-      best_params = params
-      best_details = {
+    val_scores[year] = roc_auc_score(Y_va, model.predict_proba(X_va)[:, 1])
+    train_scores[year] = roc_auc_score(Y_tr, model.predict_proba(X_tr)[:, 1])
+
+  mean_val_score = np.mean(list(val_scores.values()))
+  mean_train_score = np.mean(list(train_scores.values()))
+
+  return (
+      params,
+      mean_val_score,
+      {
           "val_scores": val_scores,
           "train_scores": train_scores,
           "mean_train": mean_train_score,
-      }
+      },
+  )
 
+
+def tune_hyperparameters_nn(folds: list, param_grid: list, n_jobs: int = -1):
+  results = Parallel(n_jobs=n_jobs)(
+      delayed(_evaluate_params)(params, folds) for params in param_grid
+  )
+
+  # max() preserves first-seen tie-breaking, matching your original loop
+  best_params, best_score, best_details = max(results, key=lambda r: r[1])
   return best_params, best_score, best_details
 
 
@@ -78,7 +85,7 @@ def main():
   args = parser.parse_args()
 
   df = read_table(args.data)
-  df = flag_chl(df)  
+
   for c in range(6):
     df[f"cluster_{c}"] = (df["spatial_cluster"] == c).astype(float)
 
@@ -87,6 +94,7 @@ def main():
 
   doy = df["Date"].dt.dayofyear
   df["YDOY_sin"] = np.sin(2 * np.pi * doy / 365.25)
+  df = flag_chl(df)  
 
   Y_all = df["HAB"]
   # Add "CHL", "CHL_uncertainty" here if dropping them
@@ -108,6 +116,7 @@ def main():
           "activation": ["relu", "tanh"],
           "solver": ["adam", "lbfgs"],
           "alpha": [0.001, 0.01, 0.1, 1.0, 10],
+          
       })
   )
 
@@ -160,8 +169,10 @@ def main():
   chl_cols = [c for c in ["CHL", "CHL_uncertainty"] if c in X_all.columns]
   if chl_cols:
     final_chl_scaler = StandardScaler()
-    X_full_chl = np.nan_to_num(    final_chl_scaler.fit_transform(X_all[chl_cols]), nan=0.0 )
-    X_full_mat = np.hstack(    [X_full_num, X_all[binary_cols].values])
+    X_full_chl = np.nan_to_num(
+        final_chl_scaler.fit_transform(X_all[chl_cols]), nan=0.0
+    )
+    X_full_mat = np.hstack([X_full_chl, X_full_num, X_all[binary_cols].values])
   else:
     final_chl_scaler = None
     X_full_mat = np.hstack([X_full_num, X_all[binary_cols].values])

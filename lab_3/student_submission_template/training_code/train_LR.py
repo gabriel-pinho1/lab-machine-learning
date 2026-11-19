@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import pickle
 
-from aux import log_experiment, month_sine, read_table, trimester_sine, biannual_sine
+from aux import log_experiment, month_sine, read_table, trimester_sine
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -12,29 +12,25 @@ from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
 
-def prepare_split(
-    X: pd.DataFrame,
-    Y: pd.Series,
-    train_idx: np.ndarray,
-    val_idx: np.ndarray,
-    num_cols: list[str],
-    binary_cols: list[str],
-):
+def prepare_split(X: pd.DataFrame,Y: pd.Series,train_idx: np.ndarray,val_idx: np.ndarray,num_cols: list[str],binary_cols: list[str],):
   X_tr, Y_tr = X.iloc[train_idx].copy(), Y.iloc[train_idx].copy()
   X_val, Y_val = X.iloc[val_idx].copy(), Y.iloc[val_idx].copy()
 
-  # Removes columns CHL and uncertainty for training
-  X_tr = X_tr.drop(columns=["CHL", "CHL_uncertainty"])
-  X_val = X_val.drop(columns=["CHL", "CHL_uncertainty"])
+  num_scaler = StandardScaler()
+  X_tr_num = num_scaler.fit_transform(X_tr[num_cols])
+  X_val_num = num_scaler.transform(X_val[num_cols])
 
-  # Does not scale the binary columns
-  scaler = StandardScaler()
-  X_tr_mat = np.hstack(
-      [scaler.fit_transform(X_tr[num_cols]), X_tr[binary_cols].values]
-  )
-  X_val_mat = np.hstack(
-      [scaler.transform(X_val[num_cols]), X_val[binary_cols].values]
-  )
+  chl_cols = [c for c in ["CHL", "CHL_uncertainty"] if c in X_tr.columns]
+  if chl_cols:
+    chl_scaler = StandardScaler()
+    X_tr_chl = np.nan_to_num(chl_scaler.fit_transform(X_tr[chl_cols]), nan=0.0)
+    X_val_chl = np.nan_to_num(chl_scaler.transform(X_val[chl_cols]), nan=0.0)
+
+    X_tr_mat = np.hstack([X_tr_chl, X_tr_num, X_tr[binary_cols].values])
+    X_val_mat = np.hstack([X_val_chl, X_val_num, X_val[binary_cols].values])
+  else:
+    X_tr_mat = np.hstack([X_tr_num, X_tr[binary_cols].values])
+    X_val_mat = np.hstack([X_val_num, X_val[binary_cols].values])
 
   return X_tr_mat, Y_tr.values, X_val_mat, Y_val.values
 
@@ -65,7 +61,7 @@ def main():
     df = read_table("../../data/classification_task1_train.csv")
     df = month_sine(df)
     df = trimester_sine(df)
-    #df = biannual_sine(df)
+
 
     for c in range(6):
         df[f"cluster_{c}"] = (df["spatial_cluster"] == c).astype(float)
@@ -83,9 +79,9 @@ def main():
     years = df["Date"].dt.year.values
 
     PREPROCESSING_TAG = (
-        "drop CHL + drop CHL_uncertainty + drop Year + drop Day + "
+        "log CHL + drop Year + drop Day + "
         "replace Season + replace Month + replace cluster +"
-        " trimester sine "
+        " trimester sine"
     )
 
     binary_cols = [c for c in X_all.columns if c.startswith(("cluster_", "season_"))]

@@ -46,6 +46,16 @@ def trimester_sine(df: pd.DataFrame):
     
     return df
 
+def flag_chl(df: pd.DataFrame) -> pd.DataFrame:
+  df = df.copy()
+  df["CHL_flag"] = df["CHL"].notna().astype(float)
+  return df
+
+def log_chl(df: pd.DataFrame) -> pd.DataFrame:
+  df = df.copy()
+  df["CHL"] = np.log1p(df["CHL"])
+  return df
+
 
 
 
