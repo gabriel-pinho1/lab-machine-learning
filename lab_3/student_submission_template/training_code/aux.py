@@ -41,9 +41,6 @@ def trimester_sine(df: pd.DataFrame):
     doy = df["Date"].dt.dayofyear
     df["timester_sin"] = np.sin(8 * np.pi * doy / 365.25)
     df["trimester_cos"] = np.cos(8 * np.pi * doy / 365.25)
-
-    
-    
     return df
 
 def flag_chl(df: pd.DataFrame) -> pd.DataFrame:
@@ -56,6 +53,11 @@ def log_chl(df: pd.DataFrame) -> pd.DataFrame:
   df["CHL"] = np.log1p(df["CHL"])
   return df
 
+def SST_UI_SST_Square(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["SST_UI_inter"] = df["SST"] * df["UI"]
+    df["SST_squared"] = df["SST"] ** 2
+    return df
 
 
 
@@ -94,3 +96,29 @@ def log_experiment(
         writer.writerow(record)
 
     print(f"Experiment logged to: {registry_path}")
+
+def annual_harmonics(df: pd.DataFrame, ks=(2, 3)):
+    df = df.copy()
+    doy = df["Date"].dt.dayofyear
+    for k in ks:
+        df[f"h{k}_sin"] = np.sin(2 * np.pi * k * doy / 365.25)
+        df[f"h{k}_cos"] = np.cos(2 * np.pi * k * doy / 365.25)
+    return df
+
+def cluster_season_interactions(df: pd.DataFrame, clusters=(0, 4, 5)):
+    df = df.copy()
+    doy = df["Date"].dt.dayofyear
+    s = np.sin(2 * np.pi * doy / 365.25)
+    c = np.cos(2 * np.pi * doy / 365.25)
+    for k in clusters:
+        m = (df["spatial_cluster"] == k).astype(float)
+        df[f"int_c{k}_sin"] = m * s
+        df[f"int_c{k}_cos"] = m * c
+    return df
+
+
+def ui_split(df: pd.DataFrame):
+    df = df.copy()
+    df["UI_pos"] = df["UI"].clip(lower=0)
+    df["UI_neg"] = (-df["UI"]).clip(lower=0)
+    return df

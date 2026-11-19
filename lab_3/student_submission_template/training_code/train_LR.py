@@ -4,12 +4,13 @@ import argparse
 from pathlib import Path
 import pickle
 
-from aux import log_experiment, month_sine, read_table, trimester_sine
+from aux import log_experiment, month_sine, read_table, trimester_sine, SST_UI_SST_Square, annual_harmonics, cluster_season_interactions, ui_split
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
+
 
 
 def prepare_split(X: pd.DataFrame,Y: pd.Series,train_idx: np.ndarray,val_idx: np.ndarray,num_cols: list[str],binary_cols: list[str],):
@@ -60,8 +61,11 @@ def main():
 
     df = read_table("../../data/classification_task1_train.csv")
     df = month_sine(df)
-    df = trimester_sine(df)
-
+    #df = trimester_sine(df)
+    #df = SST_UI_SST_Square(df)
+    #df = annual_harmonics(df)
+    #df = cluster_season_interactions(df)
+    df = ui_split(df)
 
     for c in range(6):
         df[f"cluster_{c}"] = (df["spatial_cluster"] == c).astype(float)
@@ -74,14 +78,14 @@ def main():
 
     Y_all = df["HAB"]
     X_all = df.drop(
-        columns=["CHL", "CHL_uncertainty","Date", "HAB", "Year", "Day", "Season", "spatial_cluster"]
+        columns=["CHL", "CHL_uncertainty","Date", "HAB", "Year", "Day", "Season", "spatial_cluster", "UI"]
     )
     years = df["Date"].dt.year.values
 
     PREPROCESSING_TAG = (
         "Drop CHL + drop Year + drop Day + "
         "replace Season + replace Month + replace cluster +"
-        " trimester sine"
+        " trimester sine + " "UI divided and without normal UI"  
     )
 
     binary_cols = [c for c in X_all.columns if c.startswith(("cluster_", "season_"))]
