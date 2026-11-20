@@ -10,7 +10,7 @@ import pandas as pd
 from scipy.stats import rankdata
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, average_precision_score, brier_score_loss
 from sklearn.preprocessing import StandardScaler
 
 BEST_LR_PARAMS = {
@@ -27,7 +27,7 @@ BEST_HGB_PARAMS = {
     "max_features": 0.6,
     "max_iter": 200,
     "max_leaf_nodes": 5,
-    "min_samples_leaf": 100,
+    "min_samples_leaf": 100
 }
 
 HGB_CAT_COLS = ["Season", "spatial_cluster"]
@@ -41,8 +41,8 @@ def build_feature_sets(df: pd.DataFrame):
   hgb_cols = list(X_hgb.columns)
 
   # 2. LR features
-  df_lr = month_sine(df.copy())
-  df_lr = trimester_sine(df_lr)
+  #df_lr = month_sine(df.copy())
+  df_lr = trimester_sine(df.copy())
 
   for c in range(6):
     df_lr[f"cluster_{c}"] = (df_lr["spatial_cluster"] == c).astype(float)
@@ -92,7 +92,8 @@ def apply_blend(p_lr: np.ndarray, p_hgb: np.ndarray, w_lr: float, mode: str):
   if mode == "rank" and len(p_lr) > 1:
     p_lr = rankdata(p_lr) / len(p_lr)
     p_hgb = rankdata(p_hgb) / len(p_hgb)
-  return w_lr * p_lr + (1.0 - w_lr) * p_hgb
+  #return w_lr * p_lr + (1.0 - w_lr) * p_hgb
+  return w_lr * (p_lr ** 2) + (1 - w_lr) * (p_hgb ** 2)
 
 
 def predict_blend(artifact: dict, df_test: pd.DataFrame) -> np.ndarray:
@@ -159,36 +160,35 @@ def main():
       + "\n"
   )
 
-
- 
-
-  
   blend_candidates = []
   for w_lr in np.round(np.linspace(0.0, 1.0, 11), 2):
     for mode in ["raw", "rank"]:
-      aucs = [
-          roc_auc_score(
-              y_va_dict[yr],
-              apply_blend(lr_oof[yr], hgb_oof[yr], float(w_lr), mode),
-          )
-          for yr in val_years
-      ]
-      blend_candidates.append((mode, float(w_lr), float(np.mean(aucs)), aucs))
+      metrics_va = []
+      for yr in val_years:
+        p_blend = apply_blend(lr_oof[yr], hgb_oof[yr], float(w_lr), mode)
+        metrics_va.append({
+            "auc": roc_auc_score(y_va_dict[yr], p_blend),
+            "ap": average_precision_score(y_va_dict[yr], p_blend),
+            "brier": brier_score_loss(y_va_dict[yr], p_blend)
+        })
+      
+      mean_auc = np.mean([m["auc"] for m in metrics_va])
+      mean_ap = np.mean([m["ap"] for m in metrics_va])
+      mean_brier = np.mean([m["brier"] for m in metrics_va])
+      
+      blend_candidates.append((mode, float(w_lr), float(mean_auc), float(mean_ap), float(mean_brier), metrics_va))
 
-  best_mode, best_w_lr, best_blend_auc, best_blend_folds = max(
+  best_mode, best_w_lr, best_blend_auc, best_blend_ap, best_blend_brier, best_blend_folds = max(
       blend_candidates, key=lambda r: r[2]
   )
   w_hgb = round(1.0 - best_w_lr, 1)
-  fold_str = ", ".join(
-      f"{yr}: {auc:.4f}" for yr, auc in zip(val_years, best_blend_folds)
-  )
 
   print(
-      f"Winning Blend -> mode={best_mode}, w_lr={best_w_lr:.1f},"
-      f" w_hgb={w_hgb:.1f}, CV AUC={best_blend_auc:.4f} (+/-"
-      f" {np.std(best_blend_folds):.4f}) | {fold_str}"
+      f"\nWinning Blend -> mode={best_mode}, w_lr={best_w_lr:.1f}, w_hgb={w_hgb:.1f}\n"
+      f"  CV AUC:   {best_blend_auc:.4f} (+/- {np.std([m['auc'] for m in best_blend_folds]):.4f})\n"
+      f"  CV AP:    {best_blend_ap:.4f} (+/- {np.std([m['ap'] for m in best_blend_folds]):.4f})\n"
+      f"  CV Brier: {best_blend_brier:.4f} (+/- {np.std([m['brier'] for m in best_blend_folds]):.4f})"
   )
-
   
   test_year = 2020
   tr_idx = np.where(years < test_year)[0]
@@ -208,14 +208,18 @@ def main():
   p_te_lr = lr_test_model.predict_proba(X_te_lr)[:, 1]
   p_te_hgb = hgb_test_model.predict_proba(X_hgb_all.iloc[te_idx])[:, 1]
   p_te_blend = apply_blend(p_te_lr, p_te_hgb, best_w_lr, best_mode)
+  
   test_auc = roc_auc_score(Y_all[te_idx], p_te_blend)
+  test_ap = average_precision_score(Y_all[te_idx], p_te_blend)
+  test_brier = brier_score_loss(Y_all[te_idx], p_te_blend)
 
   print(f"\n====== EXTERNAL HOLDOUT EVALUATION (TEST {test_year}) ======")
-  print(f"AUC Test {test_year} (Winning Blend): {test_auc:.4f}")
+  print(f"AUC Test {test_year}:   {test_auc:.4f}")
+  print(f"AP Test {test_year}:    {test_ap:.4f}")
+  print(f"Brier Test {test_year}: {test_brier:.4f}")
 
- 
   PREPROCESSING_TAG = (
-      "LR(drop CHL, cyclical+onehot) + HGB(native CHL NaNs, native Season &"
+      "LR(drop CHL, cyclical+onehot + only trimester functions) + HGB(native CHL NaNs, native Season &"
       " cluster, drop YDOY)"
   )
   log_experiment(
@@ -232,7 +236,6 @@ def main():
       },
   )
 
-  
   final_scaler = StandardScaler()
   X_full_lr_mat = np.hstack([
       final_scaler.fit_transform(X_lr_all[num_cols]),
@@ -266,4 +269,4 @@ def main():
 if __name__ == "__main__":
   main()
 
-# python train_blend.py --data ../../data/classification_task1_train.csv --output ../best_model/model_blend.pkl
+# python train_blend.py --data ../../data/classification_task1_train.csv --output ../best_model/model_blend.pkl 

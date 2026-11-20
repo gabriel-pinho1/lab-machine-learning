@@ -8,7 +8,7 @@ from aux import log_experiment, month_sine, read_table, trimester_sine, SST_UI_S
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, average_precision_score, brier_score_loss
 from sklearn.preprocessing import StandardScaler
 
 
@@ -37,20 +37,28 @@ def prepare_split(X: pd.DataFrame,Y: pd.Series,train_idx: np.ndarray,val_idx: np
 
 
 def tune_hyperparameters(folds: list, param_grid: list):
-  best_params, best_score, best_details = None, -1.0, {}
+  best_params, best_auc_score, best_details = None, -1.0, {}
 
   for params in param_grid:
-    scores = {}
+    fold_metrics = {}
     for year, X_tr, Y_tr, X_va, Y_va in folds:
       model = LogisticRegression(**params, max_iter=2000, random_state=42)
       model.fit(X_tr, Y_tr)
-      scores[year] = roc_auc_score(Y_va, model.predict_proba(X_va)[:, 1])
+      
+      y_prob = model.predict_proba(X_va)[:, 1]
+      
+      fold_metrics[year] = {
+          "auc": roc_auc_score(Y_va, y_prob),
+          "ap": average_precision_score(Y_va, y_prob),
+          "brier": brier_score_loss(Y_va, y_prob)
+      }
 
-    mean_score = np.mean(list(scores.values()))
-    if mean_score > best_score:
-      best_score, best_params, best_details = mean_score, params, scores
+    mean_auc = np.mean([m["auc"] for m in fold_metrics.values()])
+    
+    if mean_auc > best_auc_score:
+      best_auc_score, best_params, best_details = mean_auc, params, fold_metrics
 
-  return best_params, best_score, best_details
+  return best_params, best_auc_score, best_details
 
 
 def main():
@@ -60,12 +68,12 @@ def main():
     args = parser.parse_args()
 
     df = read_table("../../data/classification_task1_train.csv")
-    df = month_sine(df)
-    #df = trimester_sine(df)
+    #df = month_sine(df)
+    df = trimester_sine(df)
     #df = SST_UI_SST_Square(df)
     #df = annual_harmonics(df)
     #df = cluster_season_interactions(df)
-    df = ui_split(df)
+    #df = ui_split(df)
 
     for c in range(6):
         df[f"cluster_{c}"] = (df["spatial_cluster"] == c).astype(float)
@@ -78,14 +86,14 @@ def main():
 
     Y_all = df["HAB"]
     X_all = df.drop(
-        columns=["CHL", "CHL_uncertainty","Date", "HAB", "Year", "Day", "Season", "spatial_cluster", "UI"]
+        columns=["CHL", "CHL_uncertainty","Date", "HAB", "Year", "Day", "Season", "spatial_cluster"]
     )
     years = df["Date"].dt.year.values
 
     PREPROCESSING_TAG = (
         "Drop CHL + drop Year + drop Day + "
         "replace Season + replace Month + replace cluster +"
-        " trimester sine + " "UI divided and without normal UI"  
+        "without month sine + " "with trimester sine + " "with UI separation" + "cluster_season_interactions + " "average_precision_score and brier_score_loss metrics" 
     )
 
     binary_cols = [c for c in X_all.columns if c.startswith(("cluster_", "season_"))]
@@ -121,18 +129,22 @@ def main():
         for yr in val_years
     ]
 
-    best_params, mean_auc, fold_aucs = tune_hyperparameters(
-        inner_folds, param_grid
-    )
+    best_params, mean_auc, fold_metrics = tune_hyperparameters(
+    inner_folds, param_grid)
 
     print("Cross Validation Best Results")
     print(f"Best Hyperparameters: {best_params}")
-    for yr, auc in fold_aucs.items():
-        print(f"  Year {yr}: AUC = {auc:.4f}")
-        print(
-            f"Validation average AUC: {mean_auc:.4f} (+/-"
-            f" {np.std(list(fold_aucs.values())):.4f})\n"
-        )
+    for yr, metrics in fold_metrics.items():
+        print(f"  Year {yr}: AUC = {metrics['auc']:.4f} | AP = {metrics['ap']:.4f} | Brier = {metrics['brier']:.4f}")
+    
+    mean_ap = np.mean([m['ap'] for m in fold_metrics.values()])
+    mean_brier = np.mean([m['brier'] for m in fold_metrics.values()])
+
+    print(
+        f"Validation average AUC:   {mean_auc:.4f} (+/- {np.std([m['auc'] for m in fold_metrics.values()]):.4f})\n"
+        f"Validation average AP:    {mean_ap:.4f} (+/- {np.std([m['ap'] for m in fold_metrics.values()]):.4f})\n"
+        f"Validation average Brier: {mean_brier:.4f} (+/- {np.std([m['brier'] for m in fold_metrics.values()]):.4f})\n"
+    )
 
 
     test_year = 2020
@@ -170,6 +182,33 @@ def main():
 
     final_model = LogisticRegression(**best_params, max_iter=2000, random_state=42)
     final_model.fit(X_full_mat, Y_all.values)
+
+    if best_params.get("penalty") == "l1":
+        print("\n" + "="*50)
+        print("Features kept by L1 penalization (if used)")
+        print("="*50)
+        
+        feature_names = num_cols + binary_cols
+        coefs = final_model.coef_[0]
+        
+    
+        selected_features = [
+            (name, coef) for name, coef in zip(feature_names, coefs) if coef != 0.0
+        ]
+        
+
+        selected_features = sorted(selected_features, key=lambda x: abs(x[1]), reverse=True)
+        
+        print(f"Features originais fornecidas ao modelo: {len(feature_names)}")
+        print(f"Features MANTIDAS (coeficiente != 0):    {len(selected_features)}")
+        print("-" * 50)
+        
+        for name, coef in selected_features:
+            # Mostra o nome e se tem impacto positivo ou negativo na deteção de HAB
+            print(f"  {name:<25} | Coef: {coef:>8.4f}")
+        print("="*50 + "\n")
+
+
 
     # Save the fitted model, scaler, and column metadata
     model_artifact = {
