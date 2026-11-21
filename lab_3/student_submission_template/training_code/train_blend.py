@@ -23,12 +23,14 @@ BEST_LR_PARAMS = {
 BEST_HGB_PARAMS = {
     "l2_regularization": 100.0,
     "learning_rate": 0.01,
-    "max_depth": 3,
-    "max_features": 0.6,
+    "max_bins": 32,
+    "max_depth": 2,
+    "max_features": 0.7,
     "max_iter": 200,
-    "max_leaf_nodes": 5,
+    "max_leaf_nodes": 4,
     "min_samples_leaf": 100
 }
+
 
 HGB_CAT_COLS = ["Season", "spatial_cluster"]
 
@@ -37,12 +39,17 @@ def build_feature_sets(df: pd.DataFrame):
 
   # 1. HGB features
   hgb_drop = ["Date", "HAB", "Year", "Month", "Day", "YDOY"]
-  X_hgb = df.drop(columns=hgb_drop, errors="ignore").copy()
+  df_hgb = df.copy()
+  df_hgb["abs_UI"] = np.abs(df_hgb["UI"])
+  df_hgb["chl_snr"] = df_hgb["CHL"] / (df_hgb["CHL_uncertainty"] + 1e-6)
+  doy = df_hgb["Date"].dt.dayofyear
+  df_hgb["Doy"] =  doy 
+  X_hgb = df_hgb.drop(columns=hgb_drop, errors="ignore").copy()
   hgb_cols = list(X_hgb.columns)
 
   # 2. LR features
-  #df_lr = month_sine(df.copy())
-  df_lr = trimester_sine(df.copy())
+  df_lr = month_sine(df.copy())
+  df_lr = trimester_sine(df_lr)
 
   for c in range(6):
     df_lr[f"cluster_{c}"] = (df_lr["spatial_cluster"] == c).astype(float)

@@ -6,7 +6,7 @@ from datetime import datetime
 import csv
 import numpy as np
 import pandas as pd
-
+from sklearn.preprocessing import SplineTransformer
 
 DATE = "Date"
 DEFAULT_REGISTRY_PATH = Path("experiment_registry.csv")
@@ -15,6 +15,30 @@ def read_table(path: str | Path) -> pd.DataFrame:
     df = pd.read_excel(path, sheet_name="Sheet1") if path.suffix.lower() == ".xlsx" else pd.read_csv(path)
     df[DATE] = pd.to_datetime(df[DATE])
     return df.sort_values(DATE).reset_index(drop=True)
+
+def periodic_doy_spline( df: pd.DataFrame, n_knots: int = 13, degree: int = 3) -> pd.DataFrame:
+   
+    df = df.copy()
+    doy = df["Date"].dt.dayofyear.to_numpy()
+
+    # Map DOY onto a fixed [0, 1] annual phase so knots are deterministic across CV folds
+    phase = ((doy - 1) / 365.25).reshape(-1, 1)
+    knots = np.linspace(0.0, 1.0, n_knots).reshape(-1, 1)
+
+    spline = SplineTransformer(
+        knots=knots,
+        degree=degree,
+        extrapolation="periodic",
+        include_bias=False,
+    )
+    basis = spline.fit_transform(phase)
+
+    spline_cols = [f"doy_spline_{i}" for i in range(basis.shape[1])]
+    df[spline_cols] = basis
+
+    
+
+    return df
 
 def month_sine(df: pd.DataFrame):
     df = df.copy()
@@ -25,6 +49,14 @@ def month_sine(df: pd.DataFrame):
     df = df.drop(columns=["Month"])
     
     return df
+
+
+def cluster_ydoy_interactions(df: pd.DataFrame):
+  df = df.copy()
+  for c in range(6):
+    df[f"cluster_{c}_ydoy_sin"] = df[f"cluster_{c}"] * df["YDOY_sin"]
+    df[f"cluster_{c}_ydoy_cos"] = df[f"cluster_{c}"] * df["YDOY"]
+  return df
 
 def biannual_sine(df: pd.DataFrame):
     df = df.copy()
@@ -42,6 +74,8 @@ def trimester_sine(df: pd.DataFrame):
     df["timester_sin"] = np.sin(8 * np.pi * doy / 365.25)
     df["trimester_cos"] = np.cos(8 * np.pi * doy / 365.25)
     return df
+
+
 
 def flag_chl(df: pd.DataFrame) -> pd.DataFrame:
   df = df.copy()
@@ -122,3 +156,25 @@ def ui_split(df: pd.DataFrame):
     df["UI_pos"] = df["UI"].clip(lower=0)
     df["UI_neg"] = (-df["UI"]).clip(lower=0)
     return df
+
+def phys_splines(
+    df: pd.DataFrame, drop_raw: bool = True
+) -> pd.DataFrame:
+  df = df.copy()
+
+  knots = np.array([
+      [-2.0, 11.0],
+      [0.04, 14.5],
+      [2.0, 21.0],
+  ])
+  spline = SplineTransformer(
+      n_knots=3,
+      degree=2,
+      knots=knots,
+      include_bias=False,
+  )
+  sp_cols = ["UI_sp_0", "UI_sp_1", "UI_sp_2", "SST_sp_0", "SST_sp_1", "SST_sp_2"]
+  df[sp_cols] = spline.fit_transform(df[["UI", "SST"]].to_numpy())
+  if drop_raw:
+    df = df.drop(columns=["UI", "SST"])
+  return df

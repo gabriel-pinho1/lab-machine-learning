@@ -76,31 +76,34 @@ def main():
     args = parser.parse_args()
 
     df = read_table(args.data)
-    
+    df["abs_UI"] = np.abs(df["UI"])
+    df["chl_snr"] = df["CHL"] / (df["CHL_uncertainty"] + 1e-6)
+    doy = df["Date"].dt.dayofyear
+    df["Doy"] =  doy 
     Y_all = df["HAB"]
     #X_all = df.drop(columns=["Date", "HAB", "Year", "Month", "Day", "YDOY"])
-    X_all = df.drop(columns=["Date", "HAB", "Year", "Day", "Month", "YDOY"])
+    X_all = df.drop(columns=["Date", "HAB", "Year", "Month","Day" ,"YDOY"])
     years = df["Date"].dt.year.values
 
     PREPROCESSING_TAG = (
-        "native CHL NaNs + native Season & cluster + YDOY sin/cos + "
-        "drop Year/Month/Day + drop +" "New evaluation metrics + " "new_param_grid_values"
+        "native CHL NaNs + native Season & cluster + drop YDOY sin/cos + "
+        "drop Year/Month/Day + add doy + absolute upwelling" "New evaluation metrics  +add noise to sensor ration" "new_param_grid_values"
     )
 
     param_grid = list(
         ParameterGrid({
-            "max_iter": [150, 250, 350],
+            "max_iter": [100, 200, 300],
             "learning_rate": [0.01, 0.05, 0.1],
-            "max_leaf_nodes": [15, 31, 63],
-            "max_depth": [3, 5, 7],
-            "min_samples_leaf": [20, 40, 60],
-            "l2_regularization": [0.0, 10.0, 50.0],
-            "max_features": [0.5, 0.7, 0.9],
-            "max_bins": [32, 64, 128],
+            "max_leaf_nodes": [4,7,12],
+            "max_depth": [2,3],
+            "min_samples_leaf": [ 40, 60, 80, 100],
+            "l2_regularization": [50,100],
+            "max_features": [0.6, 0.7, 0.9],
+            "max_bins": [32, 64],
             "class_weight": ['balanced']
         })
     )
-
+    
     val_years = [2016, 2018, 2019]
     inner_folds = [
         (

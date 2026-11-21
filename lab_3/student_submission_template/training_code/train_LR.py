@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import pickle
 
-from aux import log_experiment, month_sine, read_table, trimester_sine, SST_UI_SST_Square, annual_harmonics, cluster_season_interactions, ui_split
+from aux import log_experiment, month_sine, read_table, trimester_sine, periodic_doy_spline, annual_harmonics, ui_split, cluster_ydoy_interactions, phys_splines
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -42,7 +42,7 @@ def tune_hyperparameters(folds: list, param_grid: list):
   for params in param_grid:
     fold_metrics = {}
     for year, X_tr, Y_tr, X_va, Y_va in folds:
-      model = LogisticRegression(**params, max_iter=2000, random_state=42)
+      model = LogisticRegression(**params, max_iter=5000, random_state=42)
       model.fit(X_tr, Y_tr)
       
       y_prob = model.predict_proba(X_va)[:, 1]
@@ -68,22 +68,24 @@ def main():
     args = parser.parse_args()
 
     df = read_table("../../data/classification_task1_train.csv")
-    #df = month_sine(df)
+    #df = periodic_doy_spline(df, n_knots=5)
+    df = phys_splines(df)
+    df = month_sine(df)
     df = trimester_sine(df)
     #df = SST_UI_SST_Square(df)
     #df = annual_harmonics(df)
     #df = cluster_season_interactions(df)
     #df = ui_split(df)
+    
 
     for c in range(6):
         df[f"cluster_{c}"] = (df["spatial_cluster"] == c).astype(float)
 
-    for s in ["Winter", "Spring", "Summer", "Fall"]:
-        df[f"season_{s}"] = (df["Season"] == s).astype(float)
+    #for s in ["Winter", "Spring", "Summer", "Fall"]:
+    #    df[f"season_{s}"] = (df["Season"] == s).astype(float)
 
     doy = df["Date"].dt.dayofyear
     df["YDOY_sin"] = np.sin(2 * np.pi * doy / 365.25)
-
     Y_all = df["HAB"]
     X_all = df.drop(
         columns=["CHL", "CHL_uncertainty","Date", "HAB", "Year", "Day", "Season", "spatial_cluster"]
@@ -91,9 +93,9 @@ def main():
     years = df["Date"].dt.year.values
 
     PREPROCESSING_TAG = (
-        "Drop CHL + drop Year + drop Day + "
-        "replace Season + replace Month + replace cluster +"
-        "without month sine + " "with trimester sine + " "with UI separation" + "cluster_season_interactions + " "average_precision_score and brier_score_loss metrics" 
+        "Drop CHL + drop Year + drop Day +Drop YDOY "
+        "drop Season + replace Month + replace cluster + spline fitting sst"
+        
     )
 
     binary_cols = [c for c in X_all.columns if c.startswith(("cluster_", "season_"))]
@@ -105,7 +107,7 @@ def main():
     param_grid = [
         {"penalty": pen, "solver": solv, "C": c, "class_weight": cw}
         for cw in [None, "balanced"]
-        for c in np.logspace(-4, 3, 50)
+        for c in np.logspace(-4, 2, 40)
         for pen, solv in [("l2", "lbfgs"), ("l1", "liblinear")]
     ] + [
         {"penalty": None, "solver": "lbfgs", "class_weight": cw}
